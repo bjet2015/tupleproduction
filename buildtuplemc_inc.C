@@ -130,7 +130,7 @@ void buildtuplemc_inc(TString colType="PbPb", TString mcType="qcd")
     TFile *f = new TFile(filename);
     //PbPb bjet pthat120 has only unsubtracted jets!!!!
     TString treename = f->Get(jettree) != 0 ? jettree : "ak4PFJetAnalyzer";
-    TTreeReader reader(jettree,f);
+    TTreeReader reader(treename,f);
     TTreeReaderValue<float> pthat(reader, "pthat");
     TTreeReaderValue<int> nref(reader, "nref");
     TTreeReaderArray<float> genpt(reader, "genpt");

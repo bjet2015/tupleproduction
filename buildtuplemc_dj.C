@@ -6,19 +6,49 @@
  *                  but allows to check if large weights corrupt errors at high pt
  */
 
+TString samplesfolder, outputfilename, jettree;
+vector<TString> subfoldernames;
+vector<int> pthats;
 
-TString samplesfolder="/data_CMS/cms/mnguyen/bJet2015/mc/pp";
 
+void Init(TString colType, TString mcType)
+{
+  TString outputfolder = "/data_CMS/cms/lisniak/bjet2015/";
+  if (colType=="PbPb" && mcType=="qcd") {
+    samplesfolder="/data_CMS/cms/mnguyen/bJet2015/mc/PbPb";
+    subfoldernames={"qcd30","qcd50","qcd80","qcd120","qcd170"};
+    pthats = {           30,     50,     80,     120,     170};
+    outputfilename = outputfolder+"mcPbPbqcd_dj.root";
+    jettree = "akPu4PFJetAnalyzer/t";
+  }
 
-vector<TString> subfoldernames={"qcd30","qcd50","qcd80","qcd120","qcd170"}; //just a typo in the foldername
-vector<int> pthats = {           30,     50,     80,     120,     220};
-TString outputfilename = "mcqcd.root";
+  else  if (colType=="PbPb" && mcType=="bjet") {
+    samplesfolder="/data_CMS/cms/mnguyen/bJet2015/mc/PbPb";
+    subfoldernames={"b30","b50","b80","b120","b170"};
+    pthats = {           30,     50,     80,     120,     170};
+    outputfilename = outputfolder+"mcPbPbbjet_dj.root";
+    jettree = "akPu4PFJetAnalyzer/t";
+  }
 
-//vector<TString> subfoldernames={"b30","b50","b80","b120","b170"};
-//vector<int> pthats = {           30,   50,   80,   120,   170};
-//TString outputfilename = "mcb.root";
+  else  if (colType=="pp" && mcType=="qcd") {
+    samplesfolder="/data_CMS/cms/mnguyen/bJet2015/mc/pp";
+    subfoldernames={"qcd30","qcd50","qcd80","qcd120","qcd170"}; //just a typo in the foldername
+    pthats = {           30,     50,     80,     120,     220};
+    outputfilename = outputfolder+"mcppqcd_dj.root";
+    jettree = "ak4PFJetAnalyzer/t";
+  } 
 
-TString jettree = "ak4PFJetAnalyzer/t";
+  else  if (colType=="pp" && mcType=="bjet") {
+    samplesfolder="/data_CMS/cms/mnguyen/bJet2015/mc/pp";
+    subfoldernames={"b30","b50","b80","b120","b170"};
+    pthats = {           30,   50,   80,   120,   170};
+    outputfilename = outputfolder+"mcppbjet_dj.root";
+    jettree = "ak4PFJetAnalyzer/t";
+  }
+  else cout<<"Unknown type of collision-mc. Use PbPb/pp-qcd/bjet"<<endl;
+  
+}
+
 
 //non-overlapping pt,hat bins loose 10-20% of statistics, but don't have large weights issue
 bool nonoverlapping = false;
@@ -36,8 +66,19 @@ int getind (float pthat)
   
 }
 
-void buildtuplemc()
+TTree *GetTree(TFile *f, TString treename)
 {
+  TTree *t = (TTree *)f->Get(treename);
+  //PbPb bjet pthat120 has only unsubtracted jets!!!!! 
+  //TODO: figure out
+  if (t==0) t = (TTree *)f->Get("ak4PFJetAnalyzer/t");
+  return t;
+}
+
+void buildtuplemc_dj(TString colType="PbPb", TString mcType="qcd")
+{
+  Init(colType, mcType);
+
   int bins = pthats.size();
 
   vector<double> weights (bins);//, x0(bins), x1(bins);
@@ -51,7 +92,7 @@ void buildtuplemc()
   for (int i=1;i<pthats.size();i++) {
     cout<<" pthat "<<pthats[i]<<"\t"<<flush;
     TFile *f0 = new TFile(Form("%s/%s/merged_HiForestAOD.root",samplesfolder.Data(),subfoldernames[i].Data()));
-    TTree *t0 = (TTree *)f0->Get(jettree);
+    TTree *t0 = GetTree(f0,jettree);
     double x0 = t0->GetEntries(Form("pthat>%d",pthats[i]));
 
     
@@ -59,7 +100,7 @@ void buildtuplemc()
     double x1=0;
     for (int j=minoverlap;j<i;j++) {
       TFile *f1 = new TFile(Form("%s/%s/merged_HiForestAOD.root",samplesfolder.Data(),subfoldernames[j].Data()));
-      TTree *t1 = (TTree *)f1->Get(jettree);
+      TTree *t1 = GetTree(f1,jettree);
       x1+=t1->GetEntries(Form("pthat>%d",pthats[i]));
       f1->Close();
     }
@@ -88,7 +129,9 @@ void buildtuplemc()
     cout<<endl<<"Processing file "<<filename<<endl;
 
     TFile *f = new TFile(filename);
-    TTreeReader reader(jettree,f);
+    //PbPb bjet pthat120 has only unsubtracted jets!!!!
+    TString treename = f->Get(jettree) != 0 ? jettree : "ak4PFJetAnalyzer";
+    TTreeReader reader(treename,f);
     TTreeReaderValue<float> pthat(reader, "pthat");
     TTreeReaderValue<int> nref(reader, "nref");
     TTreeReaderArray<float> genpt(reader, "genpt");
