@@ -15,7 +15,7 @@ void Init(TString colType, TString mcType)
 {
   TString outputfolder = "/data_CMS/cms/lisniak/bjet2015/";
   if (colType=="PbPb" && mcType=="qcd") {
-    samplesfolder="/data_CMS/cms/mnguyen/bJet2015/mc/PbPb";
+    samplesfolder="/data_CMS/cms/mnguyen/bJet2015/mc/PbPb/v2";
     subfoldernames={"qcd30","qcd50","qcd80","qcd120","qcd170"};
     pthats = {           30,     50,     80,     120,     170};
     outputfilename = outputfolder+"mcPbPbqcd_inc.root";
@@ -23,7 +23,7 @@ void Init(TString colType, TString mcType)
   }
 
   else  if (colType=="PbPb" && mcType=="bjet") {
-    samplesfolder="/data_CMS/cms/mnguyen/bJet2015/mc/PbPb";
+    samplesfolder="/data_CMS/cms/mnguyen/bJet2015/mc/PbPb/v2";
     subfoldernames={"b30","b50","b80","b120","b170"};
     pthats = {           30,     50,     80,     120,     170};
     outputfilename = outputfolder+"mcPbPbbjet_inc.root";
@@ -31,15 +31,15 @@ void Init(TString colType, TString mcType)
   }
 
   else  if (colType=="pp" && mcType=="qcd") {
-    samplesfolder="/data_CMS/cms/mnguyen/bJet2015/mc/pp";
-    subfoldernames={"qcd30","qcd50","qcd80","qcd120","qcd170"}; //just a typo in the foldername
-    pthats = {           30,     50,     80,     120,     220};
+    samplesfolder="/data_CMS/cms/mnguyen/bJet2015/mc/pp/v2";
+    subfoldernames={"qcd30","qcd50","qcd80","qcd120"};//,"qcd170"}; //just a typo in the foldername
+    pthats = {           30,     50,     80,     120};//,     220};
     outputfilename = outputfolder+"mcppqcd_inc.root";
     jettree = "ak4PFJetAnalyzer/t";
   } 
 
   else  if (colType=="pp" && mcType=="bjet") {
-    samplesfolder="/data_CMS/cms/mnguyen/bJet2015/mc/pp";
+    samplesfolder="/data_CMS/cms/mnguyen/bJet2015/mc/pp/v2";
     subfoldernames={"b30","b50","b80","b120","b170"};
     pthats = {           30,   50,   80,   120,   170};
     outputfilename = outputfolder+"mcppbjet_inc.root";
@@ -75,6 +75,40 @@ TTree *GetTree(TFile *f, TString treename)
   return t;
 }
 
+vector<TString> list_files(const char *dirname="/data_CMS/cms/mnguyen/bJet2015/mc/pp/v2", const char *ext=".root")
+{
+  vector<TString> names;// = new vector<TString>();                                                                          
+  TSystemDirectory dir(dirname, dirname);
+  TList *files = dir.GetListOfFiles();
+  if (files) {
+    TSystemFile *file;
+    TString fname;
+    TIter next(files);
+    while ((file=(TSystemFile*)next())) {
+      fname = file->GetName();
+      if (!file->IsDirectory() && fname.EndsWith(ext)) {
+        names.push_back(TString(dirname)+"/"+fname);
+      }
+    }
+  }
+
+  return names;
+}
+
+
+double geteventsinpthat(TString subfoldername, int pthat) {
+  double x0=0;
+  auto files = list_files(TString::Format("%s/%s/",samplesfolder.Data(),subfoldername.Data()));
+  for (auto f:files) {
+    TFile *f0 = new TFile(f);
+    TTree *t0 = GetTree(f0,jettree);
+    x0 += t0->GetEntries(Form("pthat>%d",pthat));
+    f0->Close();
+  }
+
+  return x0;
+}
+
 void buildtuplemc_inc(TString colType="PbPb", TString mcType="qcd")
 {
   Init(colType, mcType);
@@ -86,33 +120,26 @@ void buildtuplemc_inc(TString colType="PbPb", TString mcType="qcd")
   vector<double> eventsNextbin(pthats.size());
   vector<double> abovethresh(bins);
   weights[0] = 1;
-
+  
   cout<<"Calculating weights"<<endl;
   cout<<" pthat "<<pthats[0]<<"\t"<<flush;
   for (int i=1;i<pthats.size();i++) {
     cout<<" pthat "<<pthats[i]<<"\t"<<flush;
-    TFile *f0 = new TFile(Form("%s/%s/merged_HiForestAOD.root",samplesfolder.Data(),subfoldernames[i].Data()));
-    TTree *t0 = GetTree(f0,jettree); 
-    double x0 = t0->GetEntries(Form("pthat>%d",pthats[i]));
+    double x0 = geteventsinpthat(subfoldernames[i], pthats[i]);
 
     
     int minoverlap = nonoverlapping ? i-1 : 0; 
     double x1=0;
-    for (int j=minoverlap;j<i;j++) {
-      TFile *f1 = new TFile(Form("%s/%s/merged_HiForestAOD.root",samplesfolder.Data(),subfoldernames[j].Data()));
-      TTree *t1 = GetTree(f1, jettree);
-      x1+=t1->GetEntries(Form("pthat>%d",pthats[i]));
-      f1->Close();
-    }
+    for (int j=minoverlap;j<i;j++)
+      x1+=geteventsinpthat(subfoldernames[j], pthats[i]);
+    
     //    cout<<pthats[i]<<" "<<x1<<" "<<x0<<" "<<weights[i-1]<<endl;
     weights[i] = nonoverlapping ? weights[i-1]*x1/x0 : weights[i-1]*x1/(x0+x1);
-    
-    f0->Close();
   }
   double sumw = 0;
   for (auto w:weights) sumw+=w;
   for (int i=0;i<weights.size();i++) weights[i]/=sumw;
-
+  
   cout<<endl<<"Weights : "<<endl;
   for (auto w:weights) cout<<w<<"\t";
   cout<<endl;
@@ -124,7 +151,9 @@ void buildtuplemc_inc(TString colType="PbPb", TString mcType="qcd")
   TNtuple *nt = new TNtuple("nt","nt","pthat:weight:genpt:jtpt:jtphi:jteta:discr_csvSimple:refparton_flavorForB");
   
   for (int i=0;i<pthats.size();i++) {
-    TString filename = TString::Format("%s/%s/merged_HiForestAOD.root",samplesfolder.Data(),subfoldernames[i].Data());
+    auto files = list_files(TString::Format("%s/%s/",samplesfolder.Data(),subfoldernames[i].Data()));
+
+    for (auto filename:files) {
     cout<<endl<<"Processing file "<<filename<<endl;
 
     TFile *f = new TFile(filename);
@@ -168,6 +197,7 @@ void buildtuplemc_inc(TString colType="PbPb", TString mcType="qcd")
       }
     }
     f->Close();
+    }
   }
   
   fout->cd();
