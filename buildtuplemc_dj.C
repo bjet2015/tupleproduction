@@ -9,7 +9,7 @@
 TString samplesfolder, outputfilename, jettree;
 vector<TString> subfoldernames;
 vector<int> pthats;
-
+vector<double> CS;
 
 void Init(TString colType, TString mcType)
 {
@@ -31,15 +31,16 @@ void Init(TString colType, TString mcType)
   }
 
   else  if (colType=="pp" && mcType=="qcd") {
-    samplesfolder="/data_CMS/cms/mnguyen/bJet2015/mc/pp";
-    subfoldernames={"qcd30","qcd50","qcd80","qcd120","qcd170"}; //just a typo in the foldername
-    pthats = {           30,     50,     80,     120,     220};
+    samplesfolder="/data_CMS/cms/mnguyen/bJet2015/mc/pp/v2";
+    subfoldernames={"qcd30","qcd50","qcd80","qcd120"};//,"qcd170"}; //just a typo in the foldername
+    pthats = {           30,     50,     80,     120};//,     220};
     outputfilename = outputfolder+"mcppqcd_dj.root";
     jettree = "ak4PFJetAnalyzer/t";
+    CS = {3.455E-02, 4.068E-03, 4.959E-04, 7.096E-05};
   } 
 
   else  if (colType=="pp" && mcType=="bjet") {
-    samplesfolder="/data_CMS/cms/mnguyen/bJet2015/mc/pp";
+    samplesfolder="/data_CMS/cms/mnguyen/bJet2015/mc/pp/v2";
     subfoldernames={"b30","b50","b80","b120","b170"};
     pthats = {           30,   50,   80,   120,   170};
     outputfilename = outputfolder+"mcppbjet_dj.root";
@@ -75,6 +76,51 @@ TTree *GetTree(TFile *f, TString treename)
   return t;
 }
 
+vector<TString> list_files(const char *dirname="/data_CMS/cms/mnguyen/bJet2015/mc/pp/v2", const char *ext=".root")
+{
+  vector<TString> names;
+  TSystemDirectory dir(dirname, dirname);
+  TList *files = dir.GetListOfFiles();
+  if (files) {
+    TSystemFile *file;
+    TString fname;
+    TIter next(files);
+    while ((file=(TSystemFile*)next())) {
+      fname = file->GetName();
+      if (!file->IsDirectory() && fname.EndsWith(ext)) {
+        names.push_back(TString(dirname)+"/"+fname);
+      }
+    }
+  }
+
+  return names;
+}
+double geteventsinpthat(TString subfoldername, float pthat) {
+  double x0=0;
+  auto files = list_files(TString::Format("%s/%s/",samplesfolder.Data(),subfoldername.Data()));
+  for (auto f:files) {
+    TFile *f0 = new TFile(f);
+    TTree *t0 = GetTree(f0,jettree);
+    x0 += t0->GetEntries(Form("pthat>%f",pthat));
+    f0->Close();
+  }
+
+  return x0;
+}
+
+double geteventsinpthat(TString subfoldername, float pthatmin, float pthatmax)
+{
+  double x0=0;
+  auto files = list_files(TString::Format("%s/%s/",samplesfolder.Data(),subfoldername.Data()));
+  for (auto f:files) {
+    TFile *f0 = new TFile(f);
+    TTree *t0 = GetTree(f0,jettree);
+    x0 += t0->GetEntries(Form("pthat>%f && pthat<%f",pthatmin, pthatmax));
+    f0->Close();
+  }
+  return x0;
+}
+
 void buildtuplemc_dj(TString colType="PbPb", TString mcType="qcd")
 {
   Init(colType, mcType);
@@ -88,7 +134,7 @@ void buildtuplemc_dj(TString colType="PbPb", TString mcType="qcd")
   weights[0] = 1;
 
   cout<<"Calculating weights"<<endl;
-  cout<<" pthat "<<pthats[0]<<"\t"<<flush;
+  /* cout<<" pthat "<<pthats[0]<<"\t"<<flush;
   for (int i=1;i<pthats.size();i++) {
     cout<<" pthat "<<pthats[i]<<"\t"<<flush;
     TFile *f0 = new TFile(Form("%s/%s/merged_HiForestAOD.root",samplesfolder.Data(),subfoldernames[i].Data()));
@@ -109,6 +155,23 @@ void buildtuplemc_dj(TString colType="PbPb", TString mcType="qcd")
     
     f0->Close();
   }
+  */
+  
+  for (int i=0;i<pthats.size();i++) {
+    cout<<" pthat "<<pthats[i]<<"\t"<<flush;  
+    double x1=0;
+    if (i!=pthats.size()-1) {
+      for (int j=0;j<=i;j++)
+	x1+=geteventsinpthat(subfoldernames[j], pthats[i], pthats[i+1]);
+      weights[i] = (CS[i] - CS[i+1])/x1;
+    } else {
+      for (int j=0;j<=i;j++)
+	x1+=geteventsinpthat(subfoldernames[j], pthats[i]);
+      weights[i] = CS[i]/x1;
+    }
+  }
+  
+
 
   double sumw = 0;
   for (auto w:weights) sumw+=w;
@@ -122,7 +185,7 @@ void buildtuplemc_dj(TString colType="PbPb", TString mcType="qcd")
 
   //now fill histos
   TFile *fout = new TFile(outputfilename,"recreate");
-  TNtuple *nt = new TNtuple("nt","nt","pthat:weight:dijet:genpt0:genpt1:jtpt0:jtpt1:jtphi0:jtphi1:jteta0:jteta1:discr_csvSimple0:discr_csvSimple1:refparton_flavorForB0:refparton_flavorForB1");
+  TNtuple *nt = new TNtuple("nt","nt","pthat:pthatbin:weight:dijet:genpt0:genpt1:jtpt0:jtpt1:jtphi0:jtphi1:jteta0:jteta1:discr_csvSimple0:discr_csvSimple1:refparton_flavorForB0:refparton_flavorForB1");
   
   for (int i=0;i<pthats.size();i++) {
     TString filename = TString::Format("%s/%s/merged_HiForestAOD.root",samplesfolder.Data(),subfoldernames[i].Data());
@@ -182,7 +245,7 @@ void buildtuplemc_dj(TString colType="PbPb", TString mcType="qcd")
       vector<float> v;
 
       if (foundLJ && foundSJ)
-	v = {*pthat, (float)weights[getind(*pthat)], 1, //1 = dijet
+	v = {*pthat,(float)i, (float)weights[getind(*pthat)], 1, //1 = dijet
 	     genpt[ind[0]], genpt[ind[1]],
 	     jtpt[ind[0]], jtpt[ind[1]],
 	     jtphi[ind[0]], jtphi[ind[1]],
@@ -190,7 +253,7 @@ void buildtuplemc_dj(TString colType="PbPb", TString mcType="qcd")
 	     discr_csvSimple[ind[0]], discr_csvSimple[ind[1]],
 	     (float)refparton_flavorForB[ind[0]], (float)refparton_flavorForB[ind[1]] };
       else if (foundLJ && !foundSJ) 
-	v = {*pthat, (float)weights[getind(*pthat)], 0, //0 = monojet
+	v = {*pthat, (float)i, (float)weights[getind(*pthat)], 0, //0 = monojet
 	     genpt[ind[0]], 0,
 	     jtpt[ind[0]], 0,
 	     jtphi[ind[0]], 0,

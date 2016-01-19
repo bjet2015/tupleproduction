@@ -90,7 +90,7 @@ void buildtupledata_dj(TString sampleType="pp_PFLowPt")
     TTreeReaderValue<int> PFJet80(readerhlt, "HLT_AK4PFJet80_Eta5p1_v1");
 
     TTreeReaderValue<int> CSV60(readerhlt, "HLT_AK4PFBJetBCSV60_Eta2p1_v1");
-    TTreeReaderValue<int> CSV80(readerhlt, "HLT_AK4PFBJetBCSV60_Eta2p1_v1");
+    TTreeReaderValue<int> CSV80(readerhlt, "HLT_AK4PFBJetBCSV80_Eta2p1_v1");
     
     int nev = reader.GetEntries(true);
     totentries+=nev;

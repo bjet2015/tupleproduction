@@ -9,7 +9,7 @@
 TString samplesfolder, outputfilename, jettree;
 vector<TString> subfoldernames;
 vector<int> pthats;
-
+vector<double> CS;
 
 void Init(TString colType, TString mcType)
 {
@@ -36,6 +36,7 @@ void Init(TString colType, TString mcType)
     pthats = {           30,     50,     80,     120};//,     220};
     outputfilename = outputfolder+"mcppqcd_inc.root";
     jettree = "ak4PFJetAnalyzer/t";
+    CS = {3.455E-02, 4.068E-03, 4.959E-04, 7.096E-05};
   } 
 
   else  if (colType=="pp" && mcType=="bjet") {
@@ -96,13 +97,26 @@ vector<TString> list_files(const char *dirname="/data_CMS/cms/mnguyen/bJet2015/m
 }
 
 
-double geteventsinpthat(TString subfoldername, int pthat) {
+double geteventsinpthat(TString subfoldername, float pthat) {
   double x0=0;
   auto files = list_files(TString::Format("%s/%s/",samplesfolder.Data(),subfoldername.Data()));
   for (auto f:files) {
     TFile *f0 = new TFile(f);
     TTree *t0 = GetTree(f0,jettree);
-    x0 += t0->GetEntries(Form("pthat>%d",pthat));
+    x0 += t0->GetEntries(Form("pthat>%f",pthat));
+    f0->Close();
+  }
+
+  return x0;
+}
+
+double geteventsinpthat(TString subfoldername, float pthatmin, float pthatmax) {
+  double x0=0;
+  auto files = list_files(TString::Format("%s/%s/",samplesfolder.Data(),subfoldername.Data()));
+  for (auto f:files) {
+    TFile *f0 = new TFile(f);
+    TTree *t0 = GetTree(f0,jettree);
+    x0 += t0->GetEntries(Form("pthat>%f && pthat<%f",pthatmin, pthatmax));
     f0->Close();
   }
 
@@ -119,11 +133,12 @@ void buildtuplemc_inc(TString colType="PbPb", TString mcType="qcd")
   vector<double> eventsCurbin(pthats.size());
   vector<double> eventsNextbin(pthats.size());
   vector<double> abovethresh(bins);
+
   weights[0] = 1;
   
   cout<<"Calculating weights"<<endl;
-  cout<<" pthat "<<pthats[0]<<"\t"<<flush;
-  for (int i=1;i<pthats.size();i++) {
+  //  cout<<" pthat "<<pthats[0]<<"\t"<<flush;
+  /*  for (int i=1;i<pthats.size();i++) {
     cout<<" pthat "<<pthats[i]<<"\t"<<flush;
     double x0 = geteventsinpthat(subfoldernames[i], pthats[i]);
 
@@ -140,15 +155,31 @@ void buildtuplemc_inc(TString colType="PbPb", TString mcType="qcd")
   for (auto w:weights) sumw+=w;
   for (int i=0;i<weights.size();i++) weights[i]/=sumw;
   
+  */
+
+  for (int i=0;i<pthats.size();i++) {
+    cout<<" pthat "<<pthats[i]<<"\t"<<flush;  
+    double x1=0;
+    if (i!=pthats.size()-1) {
+      for (int j=0;j<=i;j++)
+	x1+=geteventsinpthat(subfoldernames[j], pthats[i], pthats[i+1]);
+      weights[i] = (CS[i] - CS[i+1])/x1;
+    } else {
+      for (int j=0;j<=i;j++)
+	x1+=geteventsinpthat(subfoldernames[j], pthats[i]);
+      weights[i] = CS[i]/x1;
+    }
+  }
+
   cout<<endl<<"Weights : "<<endl;
-  for (auto w:weights) cout<<w<<"\t";
-  cout<<endl;
+  for (auto w:weights) cout<<w<<"\t";  cout<<endl;
+
 
   int totentries = 0;
 
   //now fill histos
   TFile *fout = new TFile(outputfilename,"recreate");
-  TNtuple *nt = new TNtuple("nt","nt","pthat:weight:genpt:jtpt:jtphi:jteta:discr_csvSimple:refparton_flavorForB");
+  TNtuple *nt = new TNtuple("nt","nt","pthat:pthatbin:weight:genpt:jtpt:jtphi:jteta:discr_csvSimple:refparton_flavorForB");
   
   for (int i=0;i<pthats.size();i++) {
     auto files = list_files(TString::Format("%s/%s/",samplesfolder.Data(),subfoldernames[i].Data()));
@@ -189,7 +220,7 @@ void buildtuplemc_inc(TString colType="PbPb", TString mcType="qcd")
       for (int j=0;j<*nref;j++) {
 
       vector<float> v;
-      v = {*pthat, (float)weights[getind(*pthat)],
+      v = {*pthat, (float)i, (float)weights[getind(*pthat)],
 	   genpt[j], jtpt[j], jtphi[j], jteta[j], discr_csvSimple[j],
 	   (float)refparton_flavorForB[j]};
       
