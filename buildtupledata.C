@@ -1,22 +1,20 @@
-/* buildtuplemc.C - makes lightweight ntuples from HiForest files
- * change samplesfolder if necessary and subfoldernames, pthats
+/* buildtupledata.C - makes lightweight ntuples from HiForest files
+ * change samplesfolder if necessary and subfoldernames
  * change jettree if you want to use different jet algo
- * nonoverlapping = true means events from pt,hat_bin[i-1] do not overlap 
- *                  with pt,hat_bin[i]. This reduces statistics by 10-20%, 
- *                  but allows to check if large weights corrupt errors at high pt
- */
+*/
 
-TString samplesfolder, outputfilename, jettree;
+TString samplesfolder, outputfilenameinc, outputfilenamedj, jettree;
 vector<TString> subfoldernames;
 
 
-void Init(TString sampleType)
+void Init(TString sampleType, TString jetalgo)
 {
   TString outputfolder = "/data_CMS/cms/lisniak/bjet2015/";
   samplesfolder="/data_CMS/cms/mnguyen/bJet2015/data/v2/";
-  subfoldernames = {sampleType};//{"pp_PFLowPt"};
-  outputfilename = outputfolder+"data"+sampleType+"_inc.root";//datappPFLowPt_inc.root";
-  jettree = "ak4PFJetAnalyzer/t";
+  subfoldernames = {sampleType};
+  outputfilenamedj = outputfolder+"data"+sampleType+"_dj.root";
+  outputfilenameinc = outputfolder+"data"+sampleType+"_inc.root";
+  jettree = TString::Format("%s/t",jetalgo.Data());
 }
 
 TTree *GetTree(TFile *f, TString treename)
@@ -49,11 +47,11 @@ vector<TString> list_files(const char *dirname="/data_CMS/cms/mnguyen/bJet2015/m
 }
 
 
-void buildtupledata_inc(TString sampleType="pp_PFLowPt")
+void buildtupledata(TString sampleType="pp_PFLowPt", TString jetalgo = "ak4PFJetAnalyzer")
 {
-  Init(sampleType);
+  Init(sampleType, jetalgo);
 
-  vector<double> weights (1);//bins);
+  vector<double> weights (1);//for now
   weights[0] = 1;
   
   cout<<"Calculating weights"<<endl;
@@ -64,8 +62,10 @@ void buildtupledata_inc(TString sampleType="pp_PFLowPt")
   int totentries = 0;
 
   //now fill histos
-  TFile *fout = new TFile(outputfilename,"recreate");
-  TNtuple *nt = new TNtuple("nt","nt","hltCSV60:hltCSV80:hltPFJet60:hltPFJet80:jtpt:jtphi:jteta:discr_csvSimple");
+  TFile *foutdj = new TFile(outputfilenamedj,"recreate");
+  TNtuple *ntdj = new TNtuple("nt","ntdj","hltCSV60:hltCSV80:hltPFJet60:hltPFJet80:dijet:jtpt0:jtpt1:jtphi0:jtphi1:jteta0:jteta1:discr_csvSimple0:discr_csvSimple1");
+  TFile *foutinc = new TFile(outputfilenameinc,"recreate");
+  TNtuple *ntinc = new TNtuple("nt","ntinc","hltCSV60:hltCSV80:hltPFJet60:hltPFJet80:jtpt:jtphi:jteta:discr_csvSimple");
   
   for (int i=0;i<subfoldernames.size();i++) {
     auto files = list_files(TString::Format("%s/%s/",samplesfolder.Data(),subfoldernames[i].Data()));
@@ -93,13 +93,16 @@ void buildtupledata_inc(TString sampleType="pp_PFLowPt")
 
     TTreeReader readerevt("hiEvtAnalyzer/HiTree",f);
     TTreeReaderValue<float> vz(readerevt, "vz");
-
+    
     int nev = reader.GetEntries(true);
     totentries+=nev;
     int onep = nev/100;
     int evCounter = 0;
     TTimeStamp t0;
-
+    
+    //for testing - only 2% of data
+    //    while (evCounter<2*onep && reader.Next()) {
+    //go full file
     while (reader.Next()) {
       readerhlt.Next();
       readerevt.Next();
@@ -110,29 +113,71 @@ void buildtupledata_inc(TString sampleType="pp_PFLowPt")
 	cout<<" \r"<<evCounter/onep<<"%   "<<" total time "<<(int)round((t1-t0)*nev/(evCounter+.1))<<" s "<<flush;
       }
 
+      //event selection
       if (abs(*vz)>15) continue;
 
-      int ind[2];
-      bool foundLJ=false, foundSJ = false;
-      
-      for (int j=0;j<*nref;j++) {
+      int ind0, ind1; //indices of leading/subleading jets in jet array
+      bool foundLJ=false, foundSJ = false; //found/not found yet, for convenience
 
-      vector<float> v;
-      v = {(float)*CSV60, (float)*CSV80,(float)*PFJet60,(float)*PFJet80,
-	jtpt[j], jtphi[j], jteta[j], discr_csvSimple[j]};
-      
-      nt->Fill(&v[0]);
+
+      for (int j=0;j<*nref;j++) {
+        //acceptance selection
+        if (abs(jteta[j])>2) continue;
+
+        //fill inclusive jet ntuple for every jet in the acceptance region
+        vector<float> vinc;
+        vinc = {(float)*CSV60, (float)*CSV80,(float)*PFJet60,(float)*PFJet80,
+          jtpt[j], jtphi[j], jteta[j], discr_csvSimple[j]};
+        ntinc->Fill(&vinc[0]);
+
+        if (!foundLJ) { //looking for the leading jet
+            ind0 = j;
+            foundLJ=true;
+            continue;
+          }
+        if (foundLJ && !foundSJ) {
+            ind1 = j;
+            foundSJ = true;
+        }
+
+
       }
+
+      //fill dijet ntuple
+      vector<float> vdj;
+      if (foundLJ && foundSJ)
+        vdj = {(float)*CSV60, (float)*CSV80,(float)*PFJet60,(float)*PFJet80, 1, //1 = dijet
+             jtpt[ind0], jtpt[ind1],
+             jtphi[ind0], jtphi[ind1],
+             jteta[ind0], jteta[ind1],
+             discr_csvSimple[ind0], discr_csvSimple[ind1] };
+      else if (foundLJ && !foundSJ)
+        vdj = {(float)*CSV60, (float)*CSV80,(float)*PFJet60,(float)*PFJet80, 0, //0 = monojet
+             jtpt[ind0], 0,
+             jtphi[ind0], 0,
+             jteta[ind0], 0,
+             discr_csvSimple[ind0], 0};
+
+      if (vdj.size()>0)
+        ntdj->Fill(&vdj[0]);
+
+
+
     }
+
     f->Close();
     }
   }
   
-  fout->cd();
-  nt->Write();
-  fout->Close();
+  foutdj->cd();
+  ntdj->Write();
+  foutdj->Close();
+
+  foutinc->cd();
+  ntinc->Write();
+  foutinc->Close();
 
   cout<<endl;
   cout<<"Total input entries "<<totentries<<endl;
 
-  }
+}
