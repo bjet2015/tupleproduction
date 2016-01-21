@@ -90,7 +90,10 @@ void buildtupledata_inc(TString sampleType="pp_PFLowPt")
 
     TTreeReaderValue<int> CSV60(readerhlt, "HLT_AK4PFBJetBCSV60_Eta2p1_v1");
     TTreeReaderValue<int> CSV80(readerhlt, "HLT_AK4PFBJetBCSV80_Eta2p1_v1");
-    
+
+    TTreeReader readerevt("hiEvtAnalyzer/HiTree",f);
+    TTreeReaderValue<float> vz(readerevt, "vz");
+
     int nev = reader.GetEntries(true);
     totentries+=nev;
     int onep = nev/100;
@@ -99,12 +102,15 @@ void buildtupledata_inc(TString sampleType="pp_PFLowPt")
 
     while (reader.Next()) {
       readerhlt.Next();
+      readerevt.Next();
       evCounter++;
       if (evCounter%onep==0) {
 	std::cout << std::fixed;
 	TTimeStamp t1; 
 	cout<<" \r"<<evCounter/onep<<"%   "<<" total time "<<(int)round((t1-t0)*nev/(evCounter+.1))<<" s "<<flush;
       }
+
+      if (abs(*vz)>15) continue;
 
       int ind[2];
       bool foundLJ=false, foundSJ = false;

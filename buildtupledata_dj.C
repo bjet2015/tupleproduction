@@ -17,6 +17,7 @@ void Init(TString sampleType)
   subfoldernames = {sampleType};
   outputfilename = outputfolder+"data"+sampleType+"_dj.root";
   jettree = "ak4PFJetAnalyzer/t";
+  //  jettree = "ak4CaloJetAnalyzer/t";
 }
 
 TTree *GetTree(TFile *f, TString treename)
@@ -91,6 +92,9 @@ void buildtupledata_dj(TString sampleType="pp_PFLowPt")
 
     TTreeReaderValue<int> CSV60(readerhlt, "HLT_AK4PFBJetBCSV60_Eta2p1_v1");
     TTreeReaderValue<int> CSV80(readerhlt, "HLT_AK4PFBJetBCSV80_Eta2p1_v1");
+
+    TTreeReader readerevt("hiEvtAnalyzer/HiTree",f);
+    TTreeReaderValue<float> vz(readerevt, "vz");
     
     int nev = reader.GetEntries(true);
     totentries+=nev;
@@ -100,6 +104,7 @@ void buildtupledata_dj(TString sampleType="pp_PFLowPt")
 
     while (reader.Next()) {
       readerhlt.Next();
+      readerevt.Next();
       evCounter++;
       if (evCounter%onep==0) {
 	std::cout << std::fixed;
@@ -110,6 +115,8 @@ void buildtupledata_dj(TString sampleType="pp_PFLowPt")
       int ind0, ind1;
       bool foundLJ=false, foundSJ = false;
       
+      if (abs(*vz)>15) continue;
+
       for (int j=0;j<*nref;j++) {
         if (!foundLJ) //looking for the leading jet
           if (abs(jteta[j])<2) {

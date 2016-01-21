@@ -35,6 +35,7 @@ void Init(TString colType, TString mcType)
     subfoldernames={"qcd30","qcd50","qcd80","qcd120"};//,"qcd170"}; //just a typo in the foldername
     pthats = {           30,     50,     80,     120};//,     220};
     outputfilename = outputfolder+"mcppqcd_dj.root";
+    //    jettree = "ak4CaloJetAnalyzer/t";
     jettree = "ak4PFJetAnalyzer/t";
     CS = {3.455E-02, 4.068E-03, 4.959E-04, 7.096E-05};
   } 
@@ -72,7 +73,10 @@ TTree *GetTree(TFile *f, TString treename)
   TTree *t = (TTree *)f->Get(treename);
   //PbPb bjet pthat120 has only unsubtracted jets!!!!! 
   //TODO: figure out
-  if (t==0) t = (TTree *)f->Get("ak4PFJetAnalyzer/t");
+  if (t==0) {
+    t = (TTree *)f->Get("ak4PFJetAnalyzer/t");
+    cout<<"tree not found, using ak4PFJetAnalyzer"<<endl;
+  }
   return t;
 }
 
@@ -194,6 +198,7 @@ void buildtuplemc_dj(TString colType="PbPb", TString mcType="qcd")
     TFile *f = new TFile(filename);
     //PbPb bjet pthat120 has only unsubtracted jets!!!!
     TString treename = f->Get(jettree) != 0 ? jettree : "ak4PFJetAnalyzer";
+    if (treename!=jettree) cout <<"Changed tree to "<<treename<<endl;
     TTreeReader reader(treename,f);
     TTreeReaderValue<float> pthat(reader, "pthat");
     TTreeReaderValue<int> nref(reader, "nref");
@@ -204,6 +209,9 @@ void buildtuplemc_dj(TString colType="PbPb", TString mcType="qcd")
     TTreeReaderArray<float> discr_csvSimple(reader, "discr_csvSimple");
     TTreeReaderArray<int> refparton_flavorForB(reader, "refparton_flavorForB");
     
+    TTreeReader readerevt("hiEvtAnalyzer/HiTree",f);
+    TTreeReaderValue<float> vz(readerevt, "vz");
+
     int nev = reader.GetEntries(true);
     totentries+=nev;
     int onep = nev/100;
@@ -211,12 +219,15 @@ void buildtuplemc_dj(TString colType="PbPb", TString mcType="qcd")
     TTimeStamp t0;
 
     while (reader.Next()) {
+      readerevt.Next();
       evCounter++;
       if (evCounter%onep==0) {
 	std::cout << std::fixed;
 	TTimeStamp t1; 
 	cout<<" \r"<<evCounter/onep<<"%   "<<" total time "<<(int)round((t1-t0)*nev/(evCounter+.1))<<" s "<<flush;
       }
+
+      if (abs(*vz)>15) continue;
 
       int ind[2];
       bool foundLJ=false, foundSJ = false;

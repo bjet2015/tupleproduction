@@ -199,6 +199,9 @@ void buildtuplemc_inc(TString colType="PbPb", TString mcType="qcd")
     TTreeReaderArray<float> jtphi(reader, "jtphi");
     TTreeReaderArray<float> discr_csvSimple(reader, "discr_csvSimple");
     TTreeReaderArray<int> refparton_flavorForB(reader, "refparton_flavorForB");
+
+    TTreeReader readerevt("hiEvtAnalyzer/HiTree",f);
+    TTreeReaderValue<float> vz(readerevt, "vz");
     
     int nev = reader.GetEntries(true);
     totentries+=nev;
@@ -207,12 +210,15 @@ void buildtuplemc_inc(TString colType="PbPb", TString mcType="qcd")
     TTimeStamp t0;
 
     while (reader.Next()) {
+      readerevt.Next();
       evCounter++;
       if (evCounter%onep==0) {
 	std::cout << std::fixed;
 	TTimeStamp t1; 
 	cout<<" \r"<<evCounter/onep<<"%   "<<" total time "<<(int)round((t1-t0)*nev/(evCounter+.1))<<" s "<<flush;
       }
+
+      if (abs(*vz)>15) continue;
 
       int ind[2];
       bool foundLJ=false, foundSJ = false;
