@@ -10,10 +10,10 @@ vector<TString> subfoldernames;
 void Init(TString sampleType, TString jetalgo)
 {
   TString outputfolder = "/data_CMS/cms/lisniak/bjet2015/";
-  samplesfolder="/data_CMS/cms/mnguyen/bJet2015/data/v2/";
+  samplesfolder="/data_CMS/cms/mnguyen/bJet2015/data/";
   subfoldernames = {sampleType};
-  outputfilenamedj = outputfolder+"data"+sampleType+"_dj.root";
-  outputfilenameinc = outputfolder+"data"+sampleType+"_inc.root";
+  outputfilenamedj = outputfolder+"data"+sampleType+jetalgo+"_dj.root";
+  outputfilenameinc = outputfolder+"data"+sampleType+jetalgo+"_inc.root";
   jettree = TString::Format("%s/t",jetalgo.Data());
 }
 
@@ -22,13 +22,13 @@ TTree *GetTree(TFile *f, TString treename)
   TTree *t = (TTree *)f->Get(treename);
   //PbPb bjet pthat120 has only unsubtracted jets!!!!! 
   //TODO: figure out
-  if (t==0) t = (TTree *)f->Get("ak4PFJetAnalyzer/t");
+  //  if (t==0) t = (TTree *)f->Get("ak4PFJetAnalyzer/t");
   return t;
 }
 
-vector<TString> list_files(const char *dirname="/data_CMS/cms/mnguyen/bJet2015/mc/pp/v2", const char *ext=".root")
+vector<TString> list_files(const char *dirname, const char *ext=".root")
 {
-  vector<TString> names;// = new vector<TString>();                                                                          
+  vector<TString> names;
   TSystemDirectory dir(dirname, dirname);
   TList *files = dir.GetListOfFiles();
   if (files) {
@@ -47,7 +47,7 @@ vector<TString> list_files(const char *dirname="/data_CMS/cms/mnguyen/bJet2015/m
 }
 
 
-void buildtupledata(TString sampleType="pp_PFLowPt", TString jetalgo = "ak4PFJetAnalyzer")
+void buildtupledata(TString sampleType="pp_PFLowPt", TString jetalgo = "ak3PFJetAnalyzer")
 {
   Init(sampleType, jetalgo);
 
@@ -63,9 +63,9 @@ void buildtupledata(TString sampleType="pp_PFLowPt", TString jetalgo = "ak4PFJet
 
   //now fill histos
   TFile *foutdj = new TFile(outputfilenamedj,"recreate");
-  TNtuple *ntdj = new TNtuple("nt","ntdj","hltCSV60:hltCSV80:hltPFJet60:hltPFJet80:dijet:jtpt0:jtpt1:jtphi0:jtphi1:jteta0:jteta1:discr_csvSimple0:discr_csvSimple1");
+  TNtuple *ntdj = new TNtuple("nt","ntdj","hltCSV60:hltCSV80:hltCaloJet60:hltCaloJet80:hltPFJet60:hltPFJet80:dijet:rawpt0:rawpt1:jtpt0:jtpt1:jtphi0:jtphi1:jteta0:jteta1:discr_csvSimple0:discr_csvSimple1");
   TFile *foutinc = new TFile(outputfilenameinc,"recreate");
-  TNtuple *ntinc = new TNtuple("nt","ntinc","hltCSV60:hltCSV80:hltPFJet60:hltPFJet80:jtpt:jtphi:jteta:discr_csvSimple");
+  TNtuple *ntinc = new TNtuple("nt","ntinc","hltCSV60:hltCSV80:hltCaloJet60:hltCaloJet80:hltPFJet60:hltPFJet80:rawpt:jtpt:jtphi:jteta:discr_csvSimple");
   
   for (int i=0;i<subfoldernames.size();i++) {
     auto files = list_files(TString::Format("%s/%s/",samplesfolder.Data(),subfoldernames[i].Data()));
@@ -74,7 +74,7 @@ void buildtupledata(TString sampleType="pp_PFLowPt", TString jetalgo = "ak4PFJet
     cout<<endl<<"Processing file "<<filename<<endl;
 
     TFile *f = new TFile(filename);
-    TString treename = f->Get(jettree) != 0 ? jettree : "ak4PFJetAnalyzer";
+    TString treename = jettree;//f->Get(jettree) != 0 ? jettree : "ak3PFJetAnalyzer";
     TTreeReader reader(treename,f);
     TTreeReaderValue<int> nref(reader, "nref");
     TTreeReaderArray<float> rawpt(reader, "rawpt");
@@ -88,11 +88,20 @@ void buildtupledata(TString sampleType="pp_PFLowPt", TString jetalgo = "ak4PFJet
     TTreeReaderValue<int> PFJet60(readerhlt, "HLT_AK4PFJet60_Eta5p1_v1");
     TTreeReaderValue<int> PFJet80(readerhlt, "HLT_AK4PFJet80_Eta5p1_v1");
 
+    TTreeReaderValue<int> CaloJet60(readerhlt, "HLT_AK4CaloJet60_Eta5p1_v1");
+    TTreeReaderValue<int> CaloJet80(readerhlt, "HLT_AK4CaloJet80_Eta5p1_v1");
+
     TTreeReaderValue<int> CSV60(readerhlt, "HLT_AK4PFBJetBCSV60_Eta2p1_v1");
     TTreeReaderValue<int> CSV80(readerhlt, "HLT_AK4PFBJetBCSV80_Eta2p1_v1");
 
     TTreeReader readerevt("hiEvtAnalyzer/HiTree",f);
     TTreeReaderValue<float> vz(readerevt, "vz");
+
+    TTreeReader readerskim("skimanalysis/HltTree",f);
+    TTreeReaderValue<int> pPAprimaryVertexFilter(readerskim, "pPAprimaryVertexFilter");
+    TTreeReaderValue<int> HBHENoiseFilterResultRun2Loose(readerskim, "HBHENoiseFilterResultRun2Loose");
+    TTreeReaderValue<int> pBeamScrapingFilter(readerskim, "pBeamScrapingFilter");
+    
     
     int nev = reader.GetEntries(true);
     totentries+=nev;
@@ -106,6 +115,7 @@ void buildtupledata(TString sampleType="pp_PFLowPt", TString jetalgo = "ak4PFJet
     while (reader.Next()) {
       readerhlt.Next();
       readerevt.Next();
+      readerskim.Next();
       evCounter++;
       if (evCounter%onep==0) {
 	std::cout << std::fixed;
@@ -114,7 +124,10 @@ void buildtupledata(TString sampleType="pp_PFLowPt", TString jetalgo = "ak4PFJet
       }
 
       //event selection
-      if (abs(*vz)>15) continue;
+      if (! (abs(*vz)<15 && 
+	     *pPAprimaryVertexFilter && 
+	     *HBHENoiseFilterResultRun2Loose && 
+	     *pBeamScrapingFilter )) continue;
 
       int ind0, ind1; //indices of leading/subleading jets in jet array
       bool foundLJ=false, foundSJ = false; //found/not found yet, for convenience
@@ -126,8 +139,8 @@ void buildtupledata(TString sampleType="pp_PFLowPt", TString jetalgo = "ak4PFJet
 
         //fill inclusive jet ntuple for every jet in the acceptance region
         vector<float> vinc;
-        vinc = {(float)*CSV60, (float)*CSV80,(float)*PFJet60,(float)*PFJet80,
-          jtpt[j], jtphi[j], jteta[j], discr_csvSimple[j]};
+        vinc = {(float)*CSV60, (float)*CSV80,(float)*CaloJet60, (float)*CaloJet80,(float)*PFJet60,(float)*PFJet80,
+		rawpt[j], jtpt[j], jtphi[j], jteta[j], discr_csvSimple[j]};
         ntinc->Fill(&vinc[0]);
 
         if (!foundLJ) { //looking for the leading jet
@@ -146,13 +159,15 @@ void buildtupledata(TString sampleType="pp_PFLowPt", TString jetalgo = "ak4PFJet
       //fill dijet ntuple
       vector<float> vdj;
       if (foundLJ && foundSJ)
-        vdj = {(float)*CSV60, (float)*CSV80,(float)*PFJet60,(float)*PFJet80, 1, //1 = dijet
+        vdj = {(float)*CSV60, (float)*CSV80,(float)*CaloJet60, (float)*CaloJet80,(float)*PFJet60,(float)*PFJet80, 1, //1 = dijet
+             rawpt[ind0], rawpt[ind1],
              jtpt[ind0], jtpt[ind1],
              jtphi[ind0], jtphi[ind1],
              jteta[ind0], jteta[ind1],
              discr_csvSimple[ind0], discr_csvSimple[ind1] };
       else if (foundLJ && !foundSJ)
-        vdj = {(float)*CSV60, (float)*CSV80,(float)*PFJet60,(float)*PFJet80, 0, //0 = monojet
+        vdj = {(float)*CSV60, (float)*CSV80,(float)*CaloJet60, (float)*CaloJet80,(float)*PFJet60,(float)*PFJet80, 0, //0 = monojet
+             rawpt[ind0], 0,
              jtpt[ind0], 0,
              jtphi[ind0], 0,
              jteta[ind0], 0,
