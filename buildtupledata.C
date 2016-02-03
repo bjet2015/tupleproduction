@@ -1,20 +1,33 @@
 /* buildtupledata.C - makes lightweight ntuples from HiForest files
  * change samplesfolder if necessary and subfoldernames
  * change jettree if you want to use different jet algo
+ * collision = {PbPbBJet/PbPb/pp}
 */
 
-TString samplesfolder, outputfilenameinc, outputfilenamedj, jettree;
+TString samplesfolder, outputfilenameinc, outputfilenamedj, outputfilenameevt, jettree;
 vector<TString> subfoldernames;
 
 
-void Init(TString sampleType, TString jetalgo)
+void Init(TString collision, TString jetalgo)
 {
   TString outputfolder = "/data_CMS/cms/lisniak/bjet2015/";
   samplesfolder="/data_CMS/cms/mnguyen/bJet2015/data/";
-  subfoldernames = {sampleType};
-  outputfilenamedj = outputfolder+"data"+sampleType+jetalgo+"_dj.root";
-  outputfilenameinc = outputfolder+"data"+sampleType+jetalgo+"_inc.root";
   jettree = TString::Format("%s/t",jetalgo.Data());
+  outputfilenamedj = outputfolder+"datamerged"+collision+"_"+jetalgo+"_dj.root";
+  outputfilenameinc = outputfolder+"datamerged"+collision+"_"+jetalgo+"_inc.root";
+  outputfilenameevt = outputfolder+"datamerged"+collision+"_"+jetalgo+"_evt.root";
+  
+  if (collision=="pp")
+    subfoldernames = {"pp_PFLowPt","pp_PFHighPt"};
+  
+  if (collision=="PbPbBJet")
+    subfoldernames = {"PbPb_BJetSD"};// {"PbPb_BJetSD_upToRun262768","PbPb_BJetSD_from262768"};
+  if (collision=="PbPb")
+    subfoldernames = {"PbPb_Jet40"};
+
+  if (subfoldernames.size()==0)
+    cout<<"Don\'t know collision type "<<collision<<endl;
+
 }
 
 TTree *GetTree(TFile *f, TString treename)
@@ -46,15 +59,102 @@ vector<TString> list_files(const char *dirname, const char *ext=".root")
   return names;
 }
 
-
-void buildtupledata(TString sampleType="pp_PFLowPt", TString jetalgo = "ak3PFJetAnalyzer")
+int getEvents(TString folder, TString condition)
 {
-  Init(sampleType, jetalgo);
+  auto files = list_files(Form("%s/%s",samplesfolder.Data(),folder.Data()));
+  double x0=0;
 
-  vector<double> weights (1);//for now
-  weights[0] = 1;
+  for (auto f:files) {
+    TFile *f0 = TFile::Open(f);
+    TTree *t0 = GetTree(f0,"hltanalysis/HltTree");//jettree);
+    x0 += t0->GetEntries(condition);
+    f0->Close();
+  }
+
+  return x0;
+}
+
+vector<double> weights;
+
+void calculateWeights()
+{
+  TString lowsample = subfoldernames[0];
+  TString highsample = subfoldernames[1];
+
+  int Njt80 = getEvents(highsample, "HLT_AK4PFJet80_Eta5p1_v1");
+  int Njt80And60 = getEvents(highsample, "HLT_AK4PFJet80_Eta5p1_v1 && HLT_AK4PFJet60_Eta5p1_v1");
   
+  weights = {(double)Njt80/(double)Njt80And60, 1};
+}
+
+void calculateWeightsBjet()
+{
+  TString lowsample = subfoldernames[0];
+  //  TString highsample = subfoldernames[1];
+
+  int Njt80=0, Njt80And60=0;
+
+  for (auto s:subfoldernames) {
+    Njt80 += getEvents(s, "HLT_HIPuAK4CaloBJetCSV80_Eta2p1_v1");
+    Njt80And60 += getEvents(s, "HLT_HIPuAK4CaloBJetCSV80_Eta2p1_v1 && HLT_HIPuAK4CaloBJetCSV60_Eta2p1_v1");
+  }
+
+  weights = {(double)Njt80/(double)Njt80And60, 1};
+}
+
+
+double getweight(TString sample, int trig60, int trig80)
+{
+  //  if (!trig60 && !trig80) return 0;
+  if (sample == "pp_PFLowPt" && trig60) return weights[0];
+  if (sample == "pp_PFHighPt" && trig80) return 1;
+
+  return 0;
+}
+
+double getweightbjet(int csv60, int csv80)
+{
+  if (csv80) return weights[1];
+  if (csv60 && !csv80) return weights[0];
+
+  return 0;
+}
+
+bool matches(float jteta1, float jtphi1, float jteta2, float jtphi2)
+{
+  return sqrt((jteta1-jteta2)*(jteta1-jteta2) + (jtphi1-jtphi2)*(jtphi1-jtphi2))<0.1;//TODO: to be adjusted
+} 
+
+bool goodBtaggedEvent(float leadjtphi, float leadjteta, TTreeReaderArray<float> trigpt, TTreeReaderArray<float> trigphi, TTreeReaderArray<float> trigeta)
+{return true;
+  //b-tagged jets are doubled in trigger array so b-jet cannot be the only one
+  if (trigpt.GetSize()==1) return false; 
+
+  vector<int> btagged;
+
+  for (int i=0;i<trigpt.GetSize();i++)
+    for (int j=i+1;j<trigpt.GetSize();j++)
+      if (trigpt[i]==trigpt[j]) btagged.push_back(i);
+
+  for (auto ind:btagged) 
+    if (matches(leadjtphi, leadjteta, trigphi[ind], trigeta[ind])) return true;
+
+  return false;
+}
+
+
+void buildtupledata(TString collision = "PbPbBJet", TString jetalgo = "akVs4PFJetAnalyzer")
+{
+  Init(collision, jetalgo);
+
   cout<<"Calculating weights"<<endl;
+  if (collision == "PbPbBJet")
+    calculateWeightsBjet();
+  else if (collision=="PbPb")
+    weights = {1.};
+  else if (collision=="pp")
+    calculateWeights();
+  else cout<<"Unknown collision type "<<collision<<endl;
 
   for (auto w:weights) cout<<w<<"\t";
   cout<<endl;
@@ -63,11 +163,14 @@ void buildtupledata(TString sampleType="pp_PFLowPt", TString jetalgo = "ak3PFJet
 
   //now fill histos
   TFile *foutdj = new TFile(outputfilenamedj,"recreate");
-  TNtuple *ntdj = new TNtuple("nt","ntdj","hltCSV60:hltCSV80:hltCaloJet60:hltCaloJet80:hltPFJet60:hltPFJet80:dijet:rawpt0:rawpt1:jtpt0:jtpt1:jtphi0:jtphi1:jteta0:jteta1:discr_csvSimple0:discr_csvSimple1");
+  TNtuple *ntdj = new TNtuple("nt","ntdj","goodevent:bin:hltCSV60:hltCSV80:hltCaloJet40:hltCaloJet60:hltCaloJet80:hltPFJet60:hltPFJet80:weight:dijet:rawpt0:rawpt1:jtpt0:jtpt1:jtphi0:jtphi1:jteta0:jteta1:discr_csvSimple0:discr_csvSimple1");
   TFile *foutinc = new TFile(outputfilenameinc,"recreate");
-  TNtuple *ntinc = new TNtuple("nt","ntinc","hltCSV60:hltCSV80:hltCaloJet60:hltCaloJet80:hltPFJet60:hltPFJet80:rawpt:jtpt:jtphi:jteta:discr_csvSimple");
+  TNtuple *ntinc = new TNtuple("nt","ntinc","goodevent:bin:hltCSV60:hltCSV80:hltCaloJet40:hltCaloJet60:hltCaloJet80:hltPFJet60:hltPFJet80:weight:rawpt:jtpt:jtphi:jteta:discr_csvSimple");
+  TFile *foutevt = new TFile(outputfilenameevt,"recreate");
+  TNtuple *ntevt = new TNtuple("nt","ntinc","bin:hltCSV60:hltCSV80:weight");
   
   for (int i=0;i<subfoldernames.size();i++) {
+    //get all files for unmerged forests
     auto files = list_files(TString::Format("%s/%s/",samplesfolder.Data(),subfoldernames[i].Data()));
 
     for (auto filename:files) {
@@ -82,40 +185,75 @@ void buildtupledata(TString sampleType="pp_PFLowPt", TString jetalgo = "ak3PFJet
     TTreeReaderArray<float> jteta(reader, "jteta");
     TTreeReaderArray<float> jtphi(reader, "jtphi");
     TTreeReaderArray<float> discr_csvSimple(reader, "discr_csvSimple");
+    //HLT_HIPuAK4CaloBJetCSV80_Eta2p1_v1 HLT_HIPuAK4CaloJet80_Eta5p1_v1
 
+    TString calojet40trigger = collision=="pp" ? "HLT_AK4CaloJet40_Eta5p1_v1" : "HLT_HIPuAK4CaloJet40_Eta5p1_v1";
+    TString calojet60trigger = collision=="pp" ? "HLT_AK4CaloJet60_Eta5p1_v1" : "HLT_HIPuAK4CaloJet60_Eta5p1_v1";
+    TString calojet80trigger = collision=="pp" ? "HLT_AK4CaloJet80_Eta5p1_v1" : "HLT_HIPuAK4CaloJet80_Eta5p1_v1";
+    //dummy vars in PbPb case
+    TString pfjet60trigger = collision=="pp" ? "HLT_AK4PFJet60_Eta5p1_v1" : "LumiBlock";
+    TString pfjet80trigger = collision=="pp" ? "HLT_AK4PFJet80_Eta5p1_v1" : "LumiBlock";
+    TString csv60trigger = collision=="pp" ? "HLT_AK4PFBJetBCSV60_Eta2p1_v1"  : "HLT_HIPuAK4CaloBJetCSV60_Eta2p1_v1";
+    TString csv80trigger = collision=="pp" ? "HLT_AK4PFBJetBCSV80_Eta2p1_v1"  : "HLT_HIPuAK4CaloBJetCSV80_Eta2p1_v1";
+
+    //PbPb pprimaryVertexFilter && pclusterCompatibilityFilter do nothing
+    vector<TString> filterNames;
+    if (collision == "pp") 
+      filterNames = {"pPAprimaryVertexFilter", "HBHENoiseFilterResultRun2Loose", "pBeamScrapingFilter"}; 
+    else filterNames = {"pcollisionEventSelection", "HBHENoiseFilterResultRun2Loose"};
 
     TTreeReader readerhlt("hltanalysis/HltTree",f);
-    TTreeReaderValue<int> PFJet60(readerhlt, "HLT_AK4PFJet60_Eta5p1_v1");
-    TTreeReaderValue<int> PFJet80(readerhlt, "HLT_AK4PFJet80_Eta5p1_v1");
+    TTreeReaderValue<int> PFJet60(readerhlt, pfjet60trigger);
+    TTreeReaderValue<int> PFJet80(readerhlt, pfjet80trigger);
 
-    TTreeReaderValue<int> CaloJet60(readerhlt, "HLT_AK4CaloJet60_Eta5p1_v1");
-    TTreeReaderValue<int> CaloJet80(readerhlt, "HLT_AK4CaloJet80_Eta5p1_v1");
 
-    TTreeReaderValue<int> CSV60(readerhlt, "HLT_AK4PFBJetBCSV60_Eta2p1_v1");
-    TTreeReaderValue<int> CSV80(readerhlt, "HLT_AK4PFBJetBCSV80_Eta2p1_v1");
+    TTreeReaderValue<int> CaloJet40(readerhlt, calojet40trigger);
+    TTreeReaderValue<int> CaloJet60(readerhlt, calojet60trigger);
+    TTreeReaderValue<int> CaloJet80(readerhlt, calojet80trigger);
 
+    TTreeReaderValue<int> CSV60(readerhlt, csv60trigger);
+    TTreeReaderValue<int> CSV80(readerhlt, csv80trigger);
+
+    TTreeReader readercsv60object("hltobject/"+csv60trigger,f);
+    TTreeReaderArray<float> csv60pt(readercsv60object, "pt");
+    TTreeReaderArray<float> csv60eta(readercsv60object, "eta");
+    TTreeReaderArray<float> csv60phi(readercsv60object, "phi");
+    
+    TTreeReader readercsv80object("hltobject/"+csv80trigger,f);
+    TTreeReaderArray<float> csv80pt(readercsv80object, "pt");
+    TTreeReaderArray<float> csv80eta(readercsv80object, "eta");
+    TTreeReaderArray<float> csv80phi(readercsv80object, "phi");
+    
+    
     TTreeReader readerevt("hiEvtAnalyzer/HiTree",f);
     TTreeReaderValue<float> vz(readerevt, "vz");
+    TTreeReaderValue<int> bin(readerevt, "hiBin");
+    
 
     TTreeReader readerskim("skimanalysis/HltTree",f);
-    TTreeReaderValue<int> pPAprimaryVertexFilter(readerskim, "pPAprimaryVertexFilter");
-    TTreeReaderValue<int> HBHENoiseFilterResultRun2Loose(readerskim, "HBHENoiseFilterResultRun2Loose");
-    TTreeReaderValue<int> pBeamScrapingFilter(readerskim, "pBeamScrapingFilter");
+
+    vector<TTreeReaderValue<int> *>filters;
+    for (auto f:filterNames)
+      filters.push_back(new TTreeReaderValue<int>(readerskim, f));
+      
+    cout<<"added filters"<<endl;
     
-    
-    int nev = reader.GetEntries(true);
+    int nev = reader.GetEntries(true); cout<<nev<<endl;
     totentries+=nev;
     int onep = nev/100;
     int evCounter = 0;
     TTimeStamp t0;
     
     //for testing - only 2% of data
-    //    while (evCounter<2*onep && reader.Next()) {
+    //    while (evCounter<10*onep && reader.Next()) {
     //go full file
     while (reader.Next()) {
       readerhlt.Next();
       readerevt.Next();
       readerskim.Next();
+      readercsv60object.Next();
+      readercsv80object.Next();
+
       evCounter++;
       if (evCounter%onep==0) {
 	std::cout << std::fixed;
@@ -123,24 +261,49 @@ void buildtupledata(TString sampleType="pp_PFLowPt", TString jetalgo = "ak3PFJet
 	cout<<" \r"<<evCounter/onep<<"%   "<<" total time "<<(int)round((t1-t0)*nev/(evCounter+.1))<<" s "<<flush;
       }
 
-      //event selection
-      if (! (abs(*vz)<15 && 
-	     *pPAprimaryVertexFilter && 
-	     *HBHENoiseFilterResultRun2Loose && 
-	     *pBeamScrapingFilter )) continue;
+
+      int bPFJet60 = collision=="pp" ? *PFJet60 : 1;
+      int bPFJet80 = collision=="pp" ? *PFJet80 : 1;
+
+      float weight = 1;
+
+      if (collision=="pp")
+	weight = getweight(subfoldernames[i], bPFJet60, bPFJet80);
+      if (collision=="PbPbBJet")
+	weight = getweightbjet(*CSV60, *CSV80);
+      if (collision=="PbPb")
+	weight = *CaloJet40;//only calojet 40
+
+      ntevt->Fill(*bin, *CSV60, *CSV80, weight);
+
+      if (weight==0) continue;
+
+      bool goodevent = abs(*vz)<15;
+      for (auto f:filters) {
+	goodevent&=*(*f);
+      }
+
+
+      if (!goodevent) continue; //TODO: check!
 
       int ind0, ind1; //indices of leading/subleading jets in jet array
       bool foundLJ=false, foundSJ = false; //found/not found yet, for convenience
-
+      bool goodBtagevent = true;//false;
 
       for (int j=0;j<*nref;j++) {
         //acceptance selection
         if (abs(jteta[j])>2) continue;
 
+	// TODO: better logic for 
+	//	if (!foundLJ) //this one is leading
+	//	  goodBtagevent = goodBtaggedEvent(jtphi[j], jteta[j], csv60pt, csv60phi, csv60eta) ||
+	//	    goodBtaggedEvent(jtphi[j], jteta[j], csv80pt, csv80phi, csv80eta);
+	
+	
+
         //fill inclusive jet ntuple for every jet in the acceptance region
         vector<float> vinc;
-        vinc = {(float)*CSV60, (float)*CSV80,(float)*CaloJet60, (float)*CaloJet80,(float)*PFJet60,(float)*PFJet80,
-		rawpt[j], jtpt[j], jtphi[j], jteta[j], discr_csvSimple[j]};
+        vinc = {(float)goodBtagevent, (float) *bin, (float)*CSV60, (float)*CSV80,(float)*CaloJet40, (float)*CaloJet60, (float)*CaloJet80,(float)bPFJet60,(float)bPFJet80, weight,rawpt[j], jtpt[j], jtphi[j], jteta[j], discr_csvSimple[j]};
         ntinc->Fill(&vinc[0]);
 
         if (!foundLJ) { //looking for the leading jet
@@ -159,14 +322,14 @@ void buildtupledata(TString sampleType="pp_PFLowPt", TString jetalgo = "ak3PFJet
       //fill dijet ntuple
       vector<float> vdj;
       if (foundLJ && foundSJ)
-        vdj = {(float)*CSV60, (float)*CSV80,(float)*CaloJet60, (float)*CaloJet80,(float)*PFJet60,(float)*PFJet80, 1, //1 = dijet
+        vdj = {(float)goodBtagevent, (float)*bin, (float)*CSV60, (float)*CSV80,(float)*CaloJet40,(float)*CaloJet60, (float)*CaloJet80,(float)bPFJet60,(float)bPFJet80, weight, 1, //1 = dijet
              rawpt[ind0], rawpt[ind1],
              jtpt[ind0], jtpt[ind1],
              jtphi[ind0], jtphi[ind1],
              jteta[ind0], jteta[ind1],
              discr_csvSimple[ind0], discr_csvSimple[ind1] };
       else if (foundLJ && !foundSJ)
-        vdj = {(float)*CSV60, (float)*CSV80,(float)*CaloJet60, (float)*CaloJet80,(float)*PFJet60,(float)*PFJet80, 0, //0 = monojet
+        vdj = {(float)goodBtagevent, (float)*bin, (float)*CSV60, (float)*CSV80,(float)*CaloJet40,(float)*CaloJet60, (float)*CaloJet80,(float)bPFJet60,(float)bPFJet80, weight, 0, //0 = monojet
              rawpt[ind0], 0,
              jtpt[ind0], 0,
              jtphi[ind0], 0,
@@ -184,6 +347,10 @@ void buildtupledata(TString sampleType="pp_PFLowPt", TString jetalgo = "ak3PFJet
     }
   }
   
+  foutevt->cd();
+  ntevt->Write();
+  foutevt->Close();
+
   foutdj->cd();
   ntdj->Write();
   foutdj->Close();
