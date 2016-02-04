@@ -4,31 +4,14 @@
  * collision = {PbPbBJet/PbPb/pp}
 */
 
-TString samplesfolder, outputfilenameinc, outputfilenamedj, outputfilenameevt, jettree;
+#include "parsecode.h"
+
+TString jettree;
 vector<TString> subfoldernames;
 
+TString outputfolder = "/data_CMS/cms/lisniak/bjet2015/";
+TString samplesfolder="/data_CMS/cms/mnguyen/bJet2015/data/";
 
-void Init(TString collision, TString jetalgo)
-{
-  TString outputfolder = "/data_CMS/cms/lisniak/bjet2015/";
-  samplesfolder="/data_CMS/cms/mnguyen/bJet2015/data/";
-  jettree = TString::Format("%s/t",jetalgo.Data());
-  outputfilenamedj = outputfolder+"datamerged"+collision+"_"+jetalgo+"_dj.root";
-  outputfilenameinc = outputfolder+"datamerged"+collision+"_"+jetalgo+"_inc.root";
-  outputfilenameevt = outputfolder+"datamerged"+collision+"_"+jetalgo+"_evt.root";
-  
-  if (collision=="pp")
-    subfoldernames = {"pp_PFLowPt","pp_PFHighPt"};
-  
-  if (collision=="PbPbBJet")
-    subfoldernames = {"PbPb_BJetSD"};// {"PbPb_BJetSD_upToRun262768","PbPb_BJetSD_from262768"};
-  if (collision=="PbPb")
-    subfoldernames = {"PbPb_Jet40"};
-
-  if (subfoldernames.size()==0)
-    cout<<"Don\'t know collision type "<<collision<<endl;
-
-}
 
 TTree *GetTree(TFile *f, TString treename)
 {
@@ -78,6 +61,8 @@ vector<double> weights;
 
 void calculateWeights()
 {
+  cout<<"Calculating weights"<<endl;
+
   TString lowsample = subfoldernames[0];
   TString highsample = subfoldernames[1];
 
@@ -89,6 +74,8 @@ void calculateWeights()
 
 void calculateWeightsBjet()
 {
+  cout<<"Calculating weights"<<endl;
+
   TString lowsample = subfoldernames[0];
   //  TString highsample = subfoldernames[1];
 
@@ -142,19 +129,37 @@ bool goodBtaggedEvent(float leadjtphi, float leadjteta, TTreeReaderArray<float> 
   return false;
 }
 
-
-void buildtupledata(TString collision = "PbPbBJet", TString jetalgo = "akVs4PFJetAnalyzer")
+void Init(bool PbPb, TString sample)
 {
-  Init(collision, jetalgo);
-
-  cout<<"Calculating weights"<<endl;
-  if (collision == "PbPbBJet")
-    calculateWeightsBjet();
-  else if (collision=="PbPb")
-    weights = {1.};
-  else if (collision=="pp")
+  if (!PbPb && sample=="jpf") {
+    subfoldernames = {"pp_PFLowPt","pp_PFHighPt"};
     calculateWeights();
-  else cout<<"Unknown collision type "<<collision<<endl;
+  }
+  else if (PbPb && sample=="bjt") {
+    subfoldernames = {"PbPb_BJetSD"};// {"PbPb_BJetSD_upToRun262768","PbPb_BJetSD_from262768"};
+    calculateWeightsBjet();
+  }
+  else if (PbPb && sample=="j40") {
+    subfoldernames = {"PbPb_Jet40"};
+    weights = {1.};
+  }
+  else cout<<"Don\'t know collision type: PbPb"<<PbPb<<", sample "<<sample<<endl;
+}
+
+
+void buildtupledata(TString code)//(TString collision = "PbPbBJet", TString jetalgo = "akVs4PFJetAnalyzer")
+{
+  if (!dt(code)) { cout<<"Not data: "<<code<<", exiting..."<<endl; return;}
+  
+  bool PbPb = isPbPb(code);
+  TString sample = getSample(code);
+  jettree = getjettree(code);
+
+  Init(PbPb, sample);
+
+  TString outputfilenamedj = outputfolder+"/"+code+"_djt.root";
+  TString outputfilenameinc = outputfolder+"/"+code+"_inc.root";
+  TString outputfilenameevt = outputfolder+"/"+code+"_evt.root";
 
   for (auto w:weights) cout<<w<<"\t";
   cout<<endl;
@@ -187,20 +192,19 @@ void buildtupledata(TString collision = "PbPbBJet", TString jetalgo = "akVs4PFJe
     TTreeReaderArray<float> discr_csvSimple(reader, "discr_csvSimple");
     //HLT_HIPuAK4CaloBJetCSV80_Eta2p1_v1 HLT_HIPuAK4CaloJet80_Eta5p1_v1
 
-    TString calojet40trigger = collision=="pp" ? "HLT_AK4CaloJet40_Eta5p1_v1" : "HLT_HIPuAK4CaloJet40_Eta5p1_v1";
-    TString calojet60trigger = collision=="pp" ? "HLT_AK4CaloJet60_Eta5p1_v1" : "HLT_HIPuAK4CaloJet60_Eta5p1_v1";
-    TString calojet80trigger = collision=="pp" ? "HLT_AK4CaloJet80_Eta5p1_v1" : "HLT_HIPuAK4CaloJet80_Eta5p1_v1";
+    TString calojet40trigger = !PbPb ? "HLT_AK4CaloJet40_Eta5p1_v1" : "HLT_HIPuAK4CaloJet40_Eta5p1_v1";
+    TString calojet60trigger = !PbPb ? "HLT_AK4CaloJet60_Eta5p1_v1" : "HLT_HIPuAK4CaloJet60_Eta5p1_v1";
+    TString calojet80trigger = !PbPb ? "HLT_AK4CaloJet80_Eta5p1_v1" : "HLT_HIPuAK4CaloJet80_Eta5p1_v1";
     //dummy vars in PbPb case
-    TString pfjet60trigger = collision=="pp" ? "HLT_AK4PFJet60_Eta5p1_v1" : "LumiBlock";
-    TString pfjet80trigger = collision=="pp" ? "HLT_AK4PFJet80_Eta5p1_v1" : "LumiBlock";
-    TString csv60trigger = collision=="pp" ? "HLT_AK4PFBJetBCSV60_Eta2p1_v1"  : "HLT_HIPuAK4CaloBJetCSV60_Eta2p1_v1";
-    TString csv80trigger = collision=="pp" ? "HLT_AK4PFBJetBCSV80_Eta2p1_v1"  : "HLT_HIPuAK4CaloBJetCSV80_Eta2p1_v1";
+    TString pfjet60trigger = !PbPb ? "HLT_AK4PFJet60_Eta5p1_v1" : "LumiBlock";
+    TString pfjet80trigger = !PbPb ? "HLT_AK4PFJet80_Eta5p1_v1" : "LumiBlock";
+    TString csv60trigger = !PbPb ? "HLT_AK4PFBJetBCSV60_Eta2p1_v1"  : "HLT_HIPuAK4CaloBJetCSV60_Eta2p1_v1";
+    TString csv80trigger = !PbPb ? "HLT_AK4PFBJetBCSV80_Eta2p1_v1"  : "HLT_HIPuAK4CaloBJetCSV80_Eta2p1_v1";
 
     //PbPb pprimaryVertexFilter && pclusterCompatibilityFilter do nothing
     vector<TString> filterNames;
-    if (collision == "pp") 
-      filterNames = {"pPAprimaryVertexFilter", "HBHENoiseFilterResultRun2Loose", "pBeamScrapingFilter"}; 
-    else filterNames = {"pcollisionEventSelection", "HBHENoiseFilterResultRun2Loose"};
+    if (PbPb) filterNames = {"pcollisionEventSelection", "HBHENoiseFilterResultRun2Loose"};
+    else filterNames = {"pPAprimaryVertexFilter", "HBHENoiseFilterResultRun2Loose", "pBeamScrapingFilter"}; 
 
     TTreeReader readerhlt("hltanalysis/HltTree",f);
     TTreeReaderValue<int> PFJet60(readerhlt, pfjet60trigger);
@@ -262,16 +266,16 @@ void buildtupledata(TString collision = "PbPbBJet", TString jetalgo = "akVs4PFJe
       }
 
 
-      int bPFJet60 = collision=="pp" ? *PFJet60 : 1;
-      int bPFJet80 = collision=="pp" ? *PFJet80 : 1;
+      int bPFJet60 = !PbPb ? *PFJet60 : 1;
+      int bPFJet80 = !PbPb ? *PFJet80 : 1;
 
       float weight = 1;
 
-      if (collision=="pp")
+      if (!PbPb)
 	weight = getweight(subfoldernames[i], bPFJet60, bPFJet80);
-      if (collision=="PbPbBJet")
+      if (PbPb && sample=="bjt")
 	weight = getweightbjet(*CSV60, *CSV80);
-      if (collision=="PbPb")
+      if (PbPb && sample=="j40")
 	weight = *CaloJet40;//only calojet 40
 
       ntevt->Fill(*bin, *CSV60, *CSV80, weight);

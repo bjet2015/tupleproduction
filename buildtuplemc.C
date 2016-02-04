@@ -7,52 +7,49 @@
  */
 
 #include <fstream>
+#include "parsecode.h"
 
-TString samplesfolder, outputfilenameinc, outputfilenamedj,outputfilenameevt, jettree;
+TString samplesfolder, jettree;
 vector<TString> subfoldernames;
 vector<int> pthats;
 vector<double> CS;
 
-void Init(TString colType, TString mcType, TString jetalgo)
-{
-  TString outputfolder = "/data_CMS/cms/lisniak/bjet2015/";
-  TString outfname = TString::Format("%smc%s%s%s_pythia6",outputfolder.Data(),colType.Data(), mcType.Data(),jetalgo.Data());
-  outputfilenameinc = outfname+"_inc.root";
-  outputfilenamedj  = outfname+"_dj.root";
-  outputfilenameevt  = outfname+"_evt.root";
-  jettree = jetalgo+"/t";
+TString outputfolder = "/data_CMS/cms/lisniak/bjet2015/";
 
-  if (colType=="PbPb" && mcType=="qcd") {
+void Init(bool PbPb, TString sample)
+{
+  if (PbPb && sample=="qcd") {
     samplesfolder="/data_CMS/cms/mnguyen/bJet2015/mc/PbPb";
     subfoldernames={"qcd30","qcd50","qcd80","qcd120"};
     pthats = {           30,     50,     80,     120};
   }
-
-  else  if (colType=="PbPb" && mcType=="bjet") {
+  else  if (PbPb && sample=="bjt") {
     samplesfolder="/data_CMS/cms/mnguyen/bJet2015/mc/PbPb";
     subfoldernames={"b30","b50","b80","b120","b170"};
     pthats = {           30,     50,     80,     120,     170};
   }
-
-  else  if (colType=="pp" && mcType=="qcd") {
+  else  if (!PbPb && sample=="qp8") {
+    samplesfolder="/data_CMS/cms/mnguyen/bJet2015/mc/pp/pythia8";
+    subfoldernames={"qcd30","qcd50","qcd80","qcd120"};
+    pthats = {           30,     50,     80,     120};
+    CS = {3.455E-02, 4.068E-03, 4.959E-04, 7.096E-05};
+  } 
+  else  if (!PbPb && sample=="qcd") {
     samplesfolder="/data_CMS/cms/mnguyen/bJet2015/mc/pp/pythia6";
     subfoldernames={"qcd30","qcd50","qcd80","qcd120"};
     pthats = {           30,     50,     80,     120};
     CS = {3.455E-02, 4.068E-03, 4.959E-04, 7.096E-05};
   } 
-
-  else  if (colType=="pp" && mcType=="bjet") {
+  else  if (!PbPb && sample=="bjt") {
     samplesfolder="/data_CMS/cms/mnguyen/bJet2015/mc/pp/pythia8";
     subfoldernames={"b30","b50","b80","b120","b170"};
     pthats = {           30,   50,   80,   120,   170};
   }
   else cout<<"Unknown type of collision-mc. Use PbPb/pp-qcd/bjet"<<endl;
-  
 }
 
 TString getfoldername(int binnumber)
 {
-  //  return TString::Format("%s/%s",samplesfolder.Data(),subfoldernames[binnumber].Data());
   return TString::Format("%s/%s/merged_HiForestAOD.root",samplesfolder.Data(),subfoldernames[binnumber].Data());
 }
 
@@ -108,9 +105,9 @@ vector<TString> list_files(const char *dirname, const char *ext=".root")
 double geteventsinpthat(int binnumber, float pthatmin)//TString subfoldername, float pthat) {
 {
   double x0=0;
-  auto files = list_files(getfoldername(binnumber));//TString::Format("%s/%s/",samplesfolder.Data(),subfoldername.Data()));
+  auto files = list_files(getfoldername(binnumber));
   for (auto f:files) {
-    TFile *f0 = TFile::Open(f);//new TFile(f);
+    TFile *f0 = TFile::Open(f);
     TTree *t0 = GetTree(f0,jettree);
     x0 += t0->GetEntries(Form("pthat>%f",pthatmin));
     f0->Close();
@@ -143,6 +140,7 @@ vector<double> calculateWeights()
   cout<<" pthat "<<pthats[0]<<"\t"<<flush;
   for (int i=1;i<pthats.size();i++) {
     cout<<" pthat "<<pthats[i]<<"\t"<<flush;
+
     TFile *f0 = new TFile(Form("%s/%s/merged_HiForestAOD.root",samplesfolder.Data(),subfoldernames[i].Data()));
     TTree *t0 = GetTree(f0,jettree);
     double x0 = t0->GetEntries(Form("pthat>%d",pthats[i]));
@@ -227,9 +225,19 @@ vector<float> getCentralityWeights()
   return res;
 }
 
-void buildtuplemc(TString colType="PbPb", TString mcType="qcd", TString jetalgo = "akVs4PFJetAnalyzer")
+void buildtuplemc(TString code)
 {
-  Init(colType, mcType, jetalgo);
+  if (!mc(code)) { cout<<"Not mc: "<<code<<", exiting..."<<endl; return;}
+
+  bool PbPb = isPbPb(code);
+  TString sample = getSample(code);
+  jettree = getjettree(code);
+
+  Init(PbPb, sample);
+
+  TString outputfilenamedj = outputfolder+"/"+code+"_djt.root";
+  TString outputfilenameinc = outputfolder+"/"+code+"_inc.root";
+  TString outputfilenameevt = outputfolder+"/"+code+"_evt.root";
 
 
   auto weights = calculateWeights();
@@ -284,7 +292,7 @@ void buildtuplemc(TString colType="PbPb", TString mcType="qcd", TString jetalgo 
       }
 
       int b = *bin;
-      float centrWeight = colType=="pp" ? 1 : centrWeights[b];
+      float centrWeight = PbPb ? centrWeights[b] : 1;
 
       vector<float> vevt = {*pthat, (float)i, (float)weights[getind(*pthat)], (float)*bin, centrWeight,
 			    (float)weights[getind(*pthat)]*centrWeight};
