@@ -140,7 +140,11 @@ void Init(bool PbPb, TString sample)
     calculateWeightsBjet();
   }
   else if (PbPb && sample=="j40") {
-    subfoldernames = {"PbPb_Jet40"};
+    subfoldernames = {"PbPb_Jet40/newProd"};
+    weights = {1.};
+  }
+  else if (PbPb && sample=="j4_") {
+    subfoldernames = {"PbPb_Jet40/oldProd"};
     weights = {1.};
   }
   else cout<<"Don\'t know collision type: PbPb"<<PbPb<<", sample "<<sample<<endl;
@@ -275,7 +279,7 @@ void buildtupledata(TString code)//(TString collision = "PbPbBJet", TString jeta
 	weight = getweight(subfoldernames[i], bPFJet60, bPFJet80);
       if (PbPb && sample=="bjt")
 	weight = getweightbjet(*CSV60, *CSV80);
-      if (PbPb && sample=="j40")
+      if (PbPb && (sample=="j40" || sample=="j4_"))
 	weight = *CaloJet40;//only calojet 40
 
       ntevt->Fill(*bin, *CSV60, *CSV80, weight);

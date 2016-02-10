@@ -1,4 +1,15 @@
 root -l -q -b buildtuplemc.C\(\"mcppqcdak4PF\"\) >out_mcppqcdak4PF &
+root -l -q -b buildtuplemc.C\(\"mcppqp8ak4PF\"\) >out_mcppqp8ak4PF &
+root -l -q -b buildtupledata.C\(\"dtppjpfak4PF\"\) >out_dtppjpfak4PF &
+
+root -l -q -b buildtuplemc.C\(\"mcPbqcdakVs4PF\"\) >out_mcPbqcdakVs4PF &
+root -l -q -b buildtuplemc.C\(\"mcPbqp8akVs4PF\"\) >out_mcPbqp8akVs4PF &
+root -l -q -b buildtupledata.C\(\"dtPbj40akVs4PF\"\) >out_dtPbj40akVs4PF &
+root -l -q -b buildtupledata.C\(\"dtPbj4_akVs4PF\"\) >out_dtPbj4_akVs4PF &
+
+
+"
+root -l -q -b buildtuplemc.C\(\"mcppqcdak4PF\"\) >out_mcppqcdak4PF &
 root -l -q -b buildtuplemc.C\(\"mcppqcdak3PF\"\) >out_mcppqcdak3PF &
 root -l -q -b buildtuplemc.C\(\"mcppqcdak4Calo\"\) >out_mcppqcdak4Calo &
 # root -l -q -b buildtuplemc.C\(\"mcppqcdak3Calo\"\) >out_mcppqcdak3Calo &
@@ -37,3 +48,4 @@ root -l -q -b buildtupledata.C\(\"dtPbbjtakVs3PF\"\) >out_dtPbbjtakVs3PF &
 root -l -q -b buildtupledata.C\(\"dtPbbjtakVs4Calo\"\) >out_dtPbbjtakVs4Calo &
 root -l -q -b buildtupledata.C\(\"dtPbbjtakVs3Calo\"\) >out_dtPbbjtakVs3Calo &
 
+"

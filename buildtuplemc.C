@@ -19,12 +19,17 @@ TString outputfolder = "/data_CMS/cms/lisniak/bjet2015/";
 void Init(bool PbPb, TString sample)
 {
   if (PbPb && sample=="qcd") {
-    samplesfolder="/data_CMS/cms/mnguyen/bJet2015/mc/PbPb";
+    samplesfolder="/data_CMS/cms/mnguyen/bJet2015/mc/PbPb/pythia6";
+    subfoldernames={"qcd30","qcd50","qcd80","qcd120"};
+    pthats = {           30,     50,     80,     120};
+  }
+  else if (PbPb && sample=="qp8") {
+    samplesfolder="/data_CMS/cms/mnguyen/bJet2015/mc/PbPb/pythia8";
     subfoldernames={"qcd30","qcd50","qcd80","qcd120"};
     pthats = {           30,     50,     80,     120};
   }
   else  if (PbPb && sample=="bjt") {
-    samplesfolder="/data_CMS/cms/mnguyen/bJet2015/mc/PbPb";
+    samplesfolder="/data_CMS/cms/mnguyen/bJet2015/mc/PbPb/pythia6";
     subfoldernames={"b30","b50","b80","b120","b170"};
     pthats = {           30,     50,     80,     120,     170};
   }
@@ -140,7 +145,7 @@ vector<double> calculateWeights()
   cout<<" pthat "<<pthats[0]<<"\t"<<flush;
   for (int i=1;i<pthats.size();i++) {
     cout<<" pthat "<<pthats[i]<<"\t"<<flush;
-
+    cout<<Form("%s/%s/merged_HiForestAOD.root",samplesfolder.Data(),subfoldernames[i].Data())<<endl;
     TFile *f0 = new TFile(Form("%s/%s/merged_HiForestAOD.root",samplesfolder.Data(),subfoldernames[i].Data()));
     TTree *t0 = GetTree(f0,jettree);
     double x0 = t0->GetEntries(Form("pthat>%d",pthats[i]));
@@ -246,9 +251,9 @@ void buildtuplemc(TString code)
 
   //now fill histos
   TFile *foutdj = new TFile(outputfilenamedj,"recreate");
-  TNtuple *ntdj = new TNtuple("nt","nt","pthat:pthatbin:pthatweight:bin:centrWeight:weight:dijet:genpt0:genpt1:rawpt0:rawpt1:jtpt0:jtpt1:jtphi0:jtphi1:jteta0:jteta1:discr_csvSimple0:discr_csvSimple1:refparton_flavorForB0:refparton_flavorForB1:pairCode");
+  TNtuple *ntdj = new TNtuple("nt","nt","pthat:pthatbin:pthatweight:bin:centrWeight:weight:dijet:subid0:subid1:genpt0:genpt1:rawpt0:rawpt1:jtpt0:jtpt1:jtphi0:jtphi1:jteta0:jteta1:discr_csvSimple0:discr_csvSimple1:refparton_flavorForB0:refparton_flavorForB1:pairCode");
   TFile *foutinc = new TFile(outputfilenameinc,"recreate");
-  TNtuple *ntinc = new TNtuple("nt","nt","pthat:pthatbin:pthatweight:bin:centrWeight:weight:genpt:rawpt:jtpt:jtphi:jteta:discr_csvSimple:refparton_flavorForB:pairCode");
+  TNtuple *ntinc = new TNtuple("nt","nt","pthat:pthatbin:pthatweight:bin:centrWeight:weight:subid:genpt:rawpt:jtpt:jtphi:jteta:discr_csvSimple:refparton_flavorForB");
 
   TFile *foutevt = new TFile(outputfilenameevt,"recreate");
   TNtuple *ntevt = new TNtuple("nt","nt","pthat:pthatbin:pthatweight:bin:centrWeight:weight");
@@ -269,6 +274,7 @@ void buildtuplemc(TString code)
     TTreeReaderArray<float> jtpt(reader, "jtpt");
     TTreeReaderArray<float> jteta(reader, "jteta");
     TTreeReaderArray<float> jtphi(reader, "jtphi");
+    TTreeReaderArray<int> subid(reader, "subid");
     TTreeReaderArray<float> discr_csvSimple(reader, "discr_csvSimple");
     TTreeReaderArray<int> refparton_flavorForB(reader, "refparton_flavorForB");
     
@@ -311,12 +317,12 @@ void buildtuplemc(TString code)
         vector<float> vinc;
         vinc = {*pthat, (float)i, (float)weights[getind(*pthat)], (float)*bin, centrWeight,
 		(float)weights[getind(*pthat)]*centrWeight,
-		genpt[j], rawpt[j],jtpt[j], jtphi[j], jteta[j], discr_csvSimple[j],
+		(float)subid[j], genpt[j], rawpt[j],jtpt[j], jtphi[j], jteta[j], discr_csvSimple[j],
 		(float)refparton_flavorForB[j]};
 
         ntinc->Fill(&vinc[0]);
 
-        if (!foundLJ) { //looking for the leading jet
+        if (!foundLJ && subid[j]==0) { //looking for the leading jet from signal
             ind0 = j;
             foundLJ=true;
             continue;
@@ -335,6 +341,7 @@ void buildtuplemc(TString code)
       if (foundLJ && foundSJ)
         vdj = {*pthat,(float)i, (float)weights[getind(*pthat)], (float)*bin, centrWeight, 
 	       (float)weights[getind(*pthat)]*centrWeight, 1, //1 = dijet
+	       (float)subid[ind0], (float)subid[ind1],
 	       genpt[ind0], genpt[ind1],
 	       rawpt[ind0], rawpt[ind1],
 	       jtpt[ind0], jtpt[ind1],
@@ -346,6 +353,7 @@ void buildtuplemc(TString code)
       else if (foundLJ && !foundSJ) 
         vdj = {*pthat, (float)i, (float)weights[getind(*pthat)], (float)*bin, centrWeight,
 	       (float)weights[getind(*pthat)]*centrWeight, 0, //0 = monojet
+	       (float)subid[ind0], 0,
 	       genpt[ind0], 0,
 	       rawpt[ind0], 0,
 	       jtpt[ind0], 0,
