@@ -145,7 +145,7 @@ vector<double> calculateWeights()
   cout<<" pthat "<<pthats[0]<<"\t"<<flush;
   for (int i=1;i<pthats.size();i++) {
     cout<<" pthat "<<pthats[i]<<"\t"<<flush;
-    cout<<Form("%s/%s/merged_HiForestAOD.root",samplesfolder.Data(),subfoldernames[i].Data())<<endl;
+
     TFile *f0 = new TFile(Form("%s/%s/merged_HiForestAOD.root",samplesfolder.Data(),subfoldernames[i].Data()));
     TTree *t0 = GetTree(f0,jettree);
     double x0 = t0->GetEntries(Form("pthat>%d",pthats[i]));
@@ -314,13 +314,15 @@ void buildtuplemc(TString code)
       for (int j=0;j<*nref;j++) {
         if (abs(jteta[j])>2) continue;
 
-        vector<float> vinc;
-        vinc = {*pthat, (float)i, (float)weights[getind(*pthat)], (float)*bin, centrWeight,
-		(float)weights[getind(*pthat)]*centrWeight,
-		(float)subid[j], genpt[j], rawpt[j],jtpt[j], jtphi[j], jteta[j], discr_csvSimple[j],
-		(float)refparton_flavorForB[j]};
-
-        ntinc->Fill(&vinc[0]);
+	//for inclusive plots, subid==0 everywhere
+	if (subid[j]==0) {
+	  vector<float> vinc;
+	  vinc = {*pthat, (float)i, (float)weights[getind(*pthat)], (float)*bin, centrWeight,
+		  (float)weights[getind(*pthat)]*centrWeight,
+		  (float)subid[j], genpt[j], rawpt[j],jtpt[j], jtphi[j], jteta[j], discr_csvSimple[j],
+		  (float)refparton_flavorForB[j]};
+	  ntinc->Fill(&vinc[0]);
+	}
 
         if (!foundLJ && subid[j]==0) { //looking for the leading jet from signal
             ind0 = j;
@@ -383,5 +385,8 @@ void buildtuplemc(TString code)
 
   cout<<endl;
   cout<<"Total input entries "<<totentries<<endl;
+
+  //making centrality-dependent ntuples
+  PutInCbins(outputfolder, code, {{0,40}, {80,200}});
 
 }

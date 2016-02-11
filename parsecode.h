@@ -35,6 +35,24 @@ TString getSample(TString code)
   return TString(code(4,3));
 }
 
+TString niceSample(TString sample)
+{
+  if (sample=="j40") return "Jet40";
+  if (sample=="j4_") return "Jet40old";
+
+  if (sample=="qcd") return "qcdPythia6";
+  if (sample=="qp8") return "qcdPythia8";
+
+  return sample;
+}
+
+TString getPythia(TString sample)
+{
+  if (sample=="qcd") return "Pythia 6";
+  if (sample=="qp8") return "Pythia 8";
+  return sample;
+}
+
 TString algo(TString code)
 {
   return TString(code(7,code.Length()-7));
@@ -93,5 +111,34 @@ TString nicepairname(TString code1, TString code2)
 {
   if (!checkcompatibility(code1,code2)) return "incompatible";
   
-  return TString((isPbPb(code1) ? "PbPb_" : "pp_"))+getSample(code1)+"_vs_"+getSample(code2)+"_"+algo(code1);
+  return TString((isPbPb(code1) ? "PbPb_" : "pp_"))+niceSample(getSample(code1))+"_vs_"+niceSample(getSample(code2))+"_"+algo(code1);
+}
+
+
+void PutInCbins(TString outputfolder, TString code, vector<vector<int> > cbins) 
+{ 
+  cout<<"Puttin' on the Cbin..."<<endl;
+  for (auto b:cbins) {
+    int low = b[0];
+    int high = b[1];
+
+    cout<<"["<<low<<","<<high<<")"<<endl;
+    
+    TString folder = TString::Format("%s/cbin%d_%d",outputfolder.Data(),low,high);
+    gSystem->MakeDirectory(folder); //returns -1 if exists
+    
+    TFile *fin, *fout;
+    TTree *ntin, *ntout;
+    
+    for (auto suff:{"_djt","_inc","_evt"}) {
+      fin = new TFile(outputfolder+"/"+code+TString(suff)+".root");
+      ntin = (TTree *)fin->Get("nt");
+      fout = new TFile(folder+"/"+code+TString(suff)+".root","recreate");
+      ntout = ntin->CopyTree(Form("bin>=%d && bin<%d",low,high));
+      ntout->Write();
+      fout->Close();
+      fin->Close();
+    }
+  }
+
 }

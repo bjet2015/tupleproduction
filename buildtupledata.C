@@ -197,6 +197,7 @@ void buildtupledata(TString code)//(TString collision = "PbPbBJet", TString jeta
     //HLT_HIPuAK4CaloBJetCSV80_Eta2p1_v1 HLT_HIPuAK4CaloJet80_Eta5p1_v1
 
     TString calojet40trigger = !PbPb ? "HLT_AK4CaloJet40_Eta5p1_v1" : "HLT_HIPuAK4CaloJet40_Eta5p1_v1";
+    TString calojet40triggerv2 = !PbPb ? "HLT_AK4CaloJet40_Eta5p1_v1" : "HLT_HIPuAK4CaloJet40_Eta5p1_v2";
     TString calojet60trigger = !PbPb ? "HLT_AK4CaloJet60_Eta5p1_v1" : "HLT_HIPuAK4CaloJet60_Eta5p1_v1";
     TString calojet80trigger = !PbPb ? "HLT_AK4CaloJet80_Eta5p1_v1" : "HLT_HIPuAK4CaloJet80_Eta5p1_v1";
     //dummy vars in PbPb case
@@ -216,6 +217,7 @@ void buildtupledata(TString code)//(TString collision = "PbPbBJet", TString jeta
 
 
     TTreeReaderValue<int> CaloJet40(readerhlt, calojet40trigger);
+    TTreeReaderValue<int> CaloJet40v2(readerhlt, calojet40triggerv2);
     TTreeReaderValue<int> CaloJet60(readerhlt, calojet60trigger);
     TTreeReaderValue<int> CaloJet80(readerhlt, calojet80trigger);
 
@@ -280,7 +282,7 @@ void buildtupledata(TString code)//(TString collision = "PbPbBJet", TString jeta
       if (PbPb && sample=="bjt")
 	weight = getweightbjet(*CSV60, *CSV80);
       if (PbPb && (sample=="j40" || sample=="j4_"))
-	weight = *CaloJet40;//only calojet 40
+	weight = *CaloJet40 || *CaloJet40v2;//only calojet 40
 
       ntevt->Fill(*bin, *CSV60, *CSV80, weight);
 
@@ -369,5 +371,8 @@ void buildtupledata(TString code)//(TString collision = "PbPbBJet", TString jeta
 
   cout<<endl;
   cout<<"Total input entries "<<totentries<<endl;
+
+  //making centrality-dependent ntuples
+  PutInCbins(outputfolder, code, {{0,40}, {80,200}});
 
 }
