@@ -114,9 +114,17 @@ TString nicepairname(TString code1, TString code2)
   return TString((isPbPb(code1) ? "PbPb_" : "pp_"))+niceSample(getSample(code1))+"_vs_"+niceSample(getSample(code2))+"_"+algo(code1);
 }
 
+TString nicecentralitylabel(TString cbin)
+{
+  if (cbin=="") return "";
+  if (cbin=="0_40") return "0-20%";
+  if (cbin=="80_200") return "40-100%";
+  return cbin;
+}
 
 void PutInCbins(TString outputfolder, TString code, vector<vector<int> > cbins) 
 { 
+  if (!isPbPb(code)) return;
   cout<<"Puttin' on the Cbin..."<<endl;
   for (auto b:cbins) {
     int low = b[0];

@@ -13,6 +13,8 @@ TString outputfolder = "/data_CMS/cms/lisniak/bjet2015/";
 TString samplesfolder="/data_CMS/cms/mnguyen/bJet2015/data/";
 
 
+const int NaN = -999;
+
 TTree *GetTree(TFile *f, TString treename)
 {
   TTree *t = (TTree *)f->Get(treename);
@@ -172,9 +174,9 @@ void buildtupledata(TString code)//(TString collision = "PbPbBJet", TString jeta
 
   //now fill histos
   TFile *foutdj = new TFile(outputfilenamedj,"recreate");
-  TNtuple *ntdj = new TNtuple("nt","ntdj","goodevent:bin:hltCSV60:hltCSV80:hltCaloJet40:hltCaloJet60:hltCaloJet80:hltPFJet60:hltPFJet80:weight:dijet:rawpt0:rawpt1:jtpt0:jtpt1:jtphi0:jtphi1:jteta0:jteta1:discr_csvSimple0:discr_csvSimple1");
+  TNtuple *ntdj = new TNtuple("nt","ntdj","goodevent:bin:hltCSV60:hltCSV80:hltCaloJet40:hltCaloJet60:hltCaloJet80:hltPFJet60:hltPFJet80:weight:dijet:rawpt0:rawpt1:jtpt0:jtpt1:jtphi0:jtphi1:jteta0:jteta1:discr_csvSimple0:discr_csvSimple1:svtxm0:svtxm1:discr_prob0:discr_prob1:svtxdls0:svtxdls1:svtxpt0:svtxpt1:svtxntrk0:svtxntrk1:nsvtx0:nsvtx1:nselIPtrk0:nselIPtrk1");
   TFile *foutinc = new TFile(outputfilenameinc,"recreate");
-  TNtuple *ntinc = new TNtuple("nt","ntinc","goodevent:bin:hltCSV60:hltCSV80:hltCaloJet40:hltCaloJet60:hltCaloJet80:hltPFJet60:hltPFJet80:weight:rawpt:jtpt:jtphi:jteta:discr_csvSimple");
+  TNtuple *ntinc = new TNtuple("nt","ntinc","goodevent:bin:hltCSV60:hltCSV80:hltCaloJet40:hltCaloJet60:hltCaloJet80:hltPFJet60:hltPFJet80:weight:rawpt:jtpt:jtphi:jteta:discr_csvSimple:svtxm:discr_prob:svtxdls:svtxpt:svtxntrk:nsvtx:nselIPtrk");
   TFile *foutevt = new TFile(outputfilenameevt,"recreate");
   TNtuple *ntevt = new TNtuple("nt","ntinc","bin:hltCSV60:hltCSV80:weight");
   
@@ -194,6 +196,17 @@ void buildtupledata(TString code)//(TString collision = "PbPbBJet", TString jeta
     TTreeReaderArray<float> jteta(reader, "jteta");
     TTreeReaderArray<float> jtphi(reader, "jtphi");
     TTreeReaderArray<float> discr_csvSimple(reader, "discr_csvSimple");
+
+    TTreeReaderArray<float> discr_prob(reader, "discr_prob");
+    TTreeReaderArray<float> svtxm(reader, "svtxm");
+    TTreeReaderArray<float> svtxdls(reader, "svtxdls");
+    TTreeReaderArray<float> svtxpt(reader, "svtxpt");
+
+    TTreeReaderArray<int> svtxntrk(reader, "svtxntrk");
+    TTreeReaderArray<int> nsvtx(reader, "nsvtx");
+    TTreeReaderArray<int> nselIPtrk(reader, "nselIPtrk");
+
+
     //HLT_HIPuAK4CaloBJetCSV80_Eta2p1_v1 HLT_HIPuAK4CaloJet80_Eta5p1_v1
 
     TString calojet40trigger = !PbPb ? "HLT_AK4CaloJet40_Eta5p1_v1" : "HLT_HIPuAK4CaloJet40_Eta5p1_v1";
@@ -313,7 +326,7 @@ void buildtupledata(TString code)//(TString collision = "PbPbBJet", TString jeta
 
         //fill inclusive jet ntuple for every jet in the acceptance region
         vector<float> vinc;
-        vinc = {(float)goodBtagevent, (float) *bin, (float)*CSV60, (float)*CSV80,(float)*CaloJet40, (float)*CaloJet60, (float)*CaloJet80,(float)bPFJet60,(float)bPFJet80, weight,rawpt[j], jtpt[j], jtphi[j], jteta[j], discr_csvSimple[j]};
+        vinc = {(float)goodBtagevent, (float) *bin, (float)*CSV60, (float)*CSV80,(float)*CaloJet40, (float)*CaloJet60, (float)*CaloJet80,(float)bPFJet60,(float)bPFJet80, weight,rawpt[j], jtpt[j], jtphi[j], jteta[j], discr_csvSimple[j],svtxm[j],discr_prob[j],svtxdls[j],svtxpt[j],(float)svtxntrk[j],(float)nsvtx[j],(float)nselIPtrk[j]};
         ntinc->Fill(&vinc[0]);
 
         if (!foundLJ) { //looking for the leading jet
@@ -333,18 +346,26 @@ void buildtupledata(TString code)//(TString collision = "PbPbBJet", TString jeta
       vector<float> vdj;
       if (foundLJ && foundSJ)
         vdj = {(float)goodBtagevent, (float)*bin, (float)*CSV60, (float)*CSV80,(float)*CaloJet40,(float)*CaloJet60, (float)*CaloJet80,(float)bPFJet60,(float)bPFJet80, weight, 1, //1 = dijet
-             rawpt[ind0], rawpt[ind1],
-             jtpt[ind0], jtpt[ind1],
-             jtphi[ind0], jtphi[ind1],
-             jteta[ind0], jteta[ind1],
-             discr_csvSimple[ind0], discr_csvSimple[ind1] };
+	       rawpt[ind0], rawpt[ind1],
+	       jtpt[ind0], jtpt[ind1],
+	       jtphi[ind0], jtphi[ind1],
+	       jteta[ind0], jteta[ind1],
+	       discr_csvSimple[ind0], discr_csvSimple[ind1],
+               svtxm[ind0],svtxm[ind1],discr_prob[ind0],discr_prob[ind1],
+               svtxdls[ind0],svtxdls[ind1], svtxpt[ind0], svtxpt[ind1],
+               (float)svtxntrk[ind0],(float)svtxntrk[ind1],(float)nsvtx[ind0],(float)nsvtx[ind1],
+               (float)nselIPtrk[ind0],(float)nselIPtrk[ind1]};
       else if (foundLJ && !foundSJ)
         vdj = {(float)goodBtagevent, (float)*bin, (float)*CSV60, (float)*CSV80,(float)*CaloJet40,(float)*CaloJet60, (float)*CaloJet80,(float)bPFJet60,(float)bPFJet80, weight, 0, //0 = monojet
-             rawpt[ind0], 0,
-             jtpt[ind0], 0,
-             jtphi[ind0], 0,
-             jteta[ind0], 0,
-             discr_csvSimple[ind0], 0};
+             rawpt[ind0], NaN,
+             jtpt[ind0], NaN,
+             jtphi[ind0], NaN,
+             jteta[ind0], NaN,
+               discr_csvSimple[ind0], NaN,
+               svtxm[ind0],NaN,discr_prob[ind0],NaN,
+               svtxdls[ind0],NaN, svtxpt[ind0], NaN,
+               (float)svtxntrk[ind0],NaN,(float)nsvtx[ind0],NaN,
+               (float)nselIPtrk[ind0],NaN};
 
       if (vdj.size()>0)
         ntdj->Fill(&vdj[0]);
