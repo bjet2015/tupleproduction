@@ -8,18 +8,25 @@
 
 #include <fstream>
 #include "parsecode.h"
+#include "centrWeighting.h"
 
+bool PbPb = false;
 TString samplesfolder, jettree,sample;
+bool subTag = false; //IF TRUE - SUBLEDING JET MUST BE TAGGED!!!
 vector<TString> subfoldernames;
 vector<int> pthats;
 vector<double> CS;
 vector<double> filterefficiency;
+TString outputfilenamedj; 
+TString outputfilenameinc;
+TString outputfilenameevt;
 
 TString outputfolder = "/data_CMS/cms/lisniak/bjet2015/";
 
 const int NaN = -999;
 
-void Init(bool PbPb)
+
+void Init()
 {
   filterefficiency = {1.,1.,1.,1.,1.};
 
@@ -270,52 +277,36 @@ bool file_exist(const char *fileName)
   return infile.good();
 }
 
-vector<float> getCentralityWeights()
-{
-  TString filename = "centralityWeights.root";
-  Long_t *id,*size,*flags,*mt;
-  TH1F *h = 0;
-  if (file_exist(filename)) {
-    TFile *f = new TFile(filename);
-    h = (TH1F *)f->Get("hCentrWeight");
-  }
-  vector<float> res;
-  for (int i=0;i<200;i++) res.push_back(h!=0 ? (float)(h->GetBinContent(i+1)) : 0);
-  return res;
-}
 
-float getGSP(TTreeReaderArray<bool> *refparton_isGSP, int j)
+float getGSP(TTreeReaderArray<bool> *&refparton_isGSP, int j)
 {
   return sample!="qp8" && sample!="bp8" ? (float)(*refparton_isGSP)[j] : -1;
 }
 
-void buildtuplemc(TString code)
+
+
+void do_buildtuplemc(TString code)
 {
-  if (!mc(code)) { cout<<"Not mc: "<<code<<", exiting..."<<endl; return;}
-
-  bool PbPb = isPbPb(code);
-  sample = getSample(code);
-  jettree = getjettree(code);
-
-  Init(PbPb);
-
-  TString outputfilenamedj = outputfolder+"/"+code+"_djt.root";
-  TString outputfilenameinc = outputfolder+"/"+code+"_inc.root";
-  TString outputfilenameevt = outputfolder+"/"+code+"_evt.root";
-
-
   auto weights = calculateWeights();
-  auto centrWeights = getCentralityWeights();
+  //auto centrWeights = getCentralityWeights(centralityfile);
   int totentries = 0;
+
+  //put only pthat weight
+  TString djvars = TString("pthat:pthatbin:pthatweight:bin:dijet:subid0:subid1:refpt0:refpt1:rawpt0:")
+      +"rawpt1:jtpt0:jtpt1:jtphi0:jtphi1:jteta0:jteta1:discr_csvSimple0:discr_csvSimple1:refparton_flavorForB0:"
+      +"refparton_flavorForB1:refparton_isGSP0:refparton_isGSP1:pairCode:svtxm0:svtxm1:discr_prob0:discr_prob1:svtxdls0:"
+      +"svtxdls1:svtxpt0:svtxpt1:svtxntrk0:svtxntrk1:nsvtx0:nsvtx1:nselIPtrk0:nselIPtrk1";
+  TString incvars = TString("pthat:pthatbin:pthatweight:bin:subid:refpt:rawpt:jtpt:jtphi:jteta:discr_csvSimple:")
+      +"refparton_flavorForB:refparton_isGSP:svtxm:discr_prob:svtxdls:svtxpt:svtxntrk:nsvtx:nselIPtrk";
 
   //now fill histos
   TFile *foutdj = new TFile(outputfilenamedj,"recreate");
-  TNtuple *ntdj = new TNtuple("nt","nt","pthat:pthatbin:pthatweight:bin:centrWeight:weight:dijet:subid0:subid1:genpt0:genpt1:rawpt0:rawpt1:jtpt0:jtpt1:jtphi0:jtphi1:jteta0:jteta1:discr_csvSimple0:discr_csvSimple1:refparton_flavorForB0:refparton_flavorForB1:refparton_isGSP0:refparton_isGSP1:pairCode:svtxm0:svtxm1:discr_prob0:discr_prob1:svtxdls0:svtxdls1:svtxpt0:svtxpt1:svtxntrk0:svtxntrk1:nsvtx0:nsvtx1:nselIPtrk0:nselIPtrk1");
+  TNtuple *ntdj = new TNtuple("nt","nt",djvars);
   TFile *foutinc = new TFile(outputfilenameinc,"recreate");
-  TNtuple *ntinc = new TNtuple("nt","nt","pthat:pthatbin:pthatweight:bin:centrWeight:weight:subid:genpt:rawpt:jtpt:jtphi:jteta:discr_csvSimple:refparton_flavorForB:refparton_isGSP:svtxm:discr_prob:svtxdls:svtxpt:svtxntrk:nsvtx:nselIPtrk");
+  TNtuple *ntinc = new TNtuple("nt","nt",incvars);
 
   TFile *foutevt = new TFile(outputfilenameevt,"recreate");
-  TNtuple *ntevt = new TNtuple("nt","nt","pthat:pthatbin:pthatweight:bin:centrWeight:weight");
+  TNtuple *ntevt = new TNtuple("nt","nt","pthat:pthatbin:pthatweight:bin");
 
   for (int i=0;i<pthats.size();i++) {
 
@@ -333,7 +324,7 @@ void buildtuplemc(TString code)
     TTreeReader reader(treename,f);
     TTreeReaderValue<float> pthat(reader, "pthat");
     TTreeReaderValue<int> nref(reader, "nref");
-    TTreeReaderArray<float> genpt(reader, "genpt");
+    TTreeReaderArray<float> refpt(reader, "refpt");
     TTreeReaderArray<float> rawpt(reader, "rawpt");
     TTreeReaderArray<float> jtpt(reader, "jtpt");
     TTreeReaderArray<float> jteta(reader, "jteta");
@@ -367,6 +358,7 @@ void buildtuplemc(TString code)
     while (reader.Next()) {
       readerevt.Next();
       evCounter++;
+
       if (evCounter%onep==0) {
 	std::cout << std::fixed;
 	TTimeStamp t1; 
@@ -374,7 +366,7 @@ void buildtuplemc(TString code)
       }
 
       int b = *bin;
-      float centrWeight = PbPb ? centrWeights[b] : 1;
+      float centrWeight = 1;//PbPb ? centrWeights[b] : 1;
 
       vector<float> vevt = {*pthat, (float)i, (float)weights[getind(*pthat)], (float)*bin, centrWeight,
 			    (float)weights[getind(*pthat)]*centrWeight};
@@ -388,23 +380,26 @@ void buildtuplemc(TString code)
       for (int j=0;j<*nref;j++) {
         if (abs(jteta[j])>2) continue;
 
-	//for inclusive plots, subid==0 everywhere
-	if (subid[j]==0) {
-	  vector<float> vinc;
-	  vinc = {*pthat, (float)i, (float)weights[getind(*pthat)], (float)*bin, centrWeight,
-		  (float)weights[getind(*pthat)]*centrWeight,
-		  (float)subid[j], genpt[j], rawpt[j],jtpt[j], jtphi[j], jteta[j], discr_csvSimple[j],
-		  (float)refparton_flavorForB[j], getGSP(refparton_isGSP,j),
-		  svtxm[j],discr_prob[j],svtxdls[j],svtxpt[j],(float)svtxntrk[j],(float)nsvtx[j],(float)nselIPtrk[j]};
-	  ntinc->Fill(&vinc[0]);
-	}
+    	//for inclusive plots, subid==0 everywhere
+    	if (subid[j]==0) {
+    	  vector<float> vinc = {*pthat, (float)i,(float)weights[getind(*pthat)],(float)*bin,
+          (float)subid[j], refpt[j], rawpt[j],jtpt[j], jtphi[j], jteta[j], discr_csvSimple[j],
+    		  (float)refparton_flavorForB[j], getGSP(refparton_isGSP,j),
+    		  svtxm[j],discr_prob[j],svtxdls[j],svtxpt[j],(float)svtxntrk[j],(float)nsvtx[j],(float)nselIPtrk[j]};
 
-        if (!foundLJ && subid[j]==0) { //looking for the leading jet from signal
-            ind0 = j;
-            foundLJ=true;
-            continue;
-          }
-        if (foundLJ && !foundSJ) {
+    	  ntinc->Fill(&vinc[0]);
+    	}
+
+      if (!foundLJ && subid[j]==0) { //looking for the leading jet from signal
+          ind0 = j;
+          foundLJ=true;
+          continue;
+        }
+        //take subleading jet if
+        //leading is found and subleading is not :) and
+        //first subleading if no subleading tagging requirement
+        //OR first tagged subleading if subleading tagging required
+        if (foundLJ && !foundSJ && (!subTag || (subTag && discr_csvSimple[j]>0.9))) {
             ind1 = j;
             foundSJ = true;
         }
@@ -416,28 +411,28 @@ void buildtuplemc(TString code)
       vector<float> vdj;
 
       if (foundLJ && foundSJ)
-        vdj = {*pthat,(float)i, (float)weights[getind(*pthat)], (float)*bin, centrWeight, 
-	       (float)weights[getind(*pthat)]*centrWeight, 1, //1 = dijet
+        vdj = {*pthat,(float)i, (float)weights[getind(*pthat)], (float)*bin, 
+         1, //1 = dijet
 	       (float)subid[ind0], (float)subid[ind1],
-	       genpt[ind0], genpt[ind1],
+	       refpt[ind0], refpt[ind1],
 	       rawpt[ind0], rawpt[ind1],
 	       jtpt[ind0], jtpt[ind1],
 	       jtphi[ind0], jtphi[ind1],
 	       jteta[ind0], jteta[ind1],
 	       discr_csvSimple[ind0], discr_csvSimple[ind1],
 	       (float)refparton_flavorForB[ind0], (float)refparton_flavorForB[ind1],
-	       getGSP(refparton_isGSP,ind0),//(float)(*refparton_isGSP)[ind0], 
-	       getGSP(refparton_isGSP,ind1),//(float)(*refparton_isGSP)[ind1],
+	       getGSP(refparton_isGSP,ind0),
+	       getGSP(refparton_isGSP,ind1),
 	       (float)getPairCode(refparton_flavorForB[ind0],refparton_flavorForB[ind1]),
 	       svtxm[ind0],svtxm[ind1],discr_prob[ind0],discr_prob[ind1],
 	       svtxdls[ind0],svtxdls[ind1], svtxpt[ind0], svtxpt[ind1],
 	       (float)svtxntrk[ind0],(float)svtxntrk[ind1],(float)nsvtx[ind0],(float)nsvtx[ind1],
 	       (float)nselIPtrk[ind0],(float)nselIPtrk[ind1]};
       else if (foundLJ && !foundSJ) 
-        vdj = {*pthat, (float)i, (float)weights[getind(*pthat)], (float)*bin, centrWeight,
-	       (float)weights[getind(*pthat)]*centrWeight, 0, //0 = monojet
+        vdj = {*pthat, (float)i, (float)weights[getind(*pthat)], (float)*bin, 
+         0, //0 = monojet
 	       (float)subid[ind0], NaN,
-	       genpt[ind0], NaN,
+	       refpt[ind0], NaN,
 	       rawpt[ind0], NaN,
 	       jtpt[ind0], NaN,
 	       jtphi[ind0], NaN,
@@ -451,8 +446,8 @@ void buildtuplemc(TString code)
 	       (float)svtxntrk[ind0],NaN,(float)nsvtx[ind0],NaN,
 	       (float)nselIPtrk[ind0],NaN};
       if (!foundLJ || (abs(*vz)>15)) {
-	vdj = {*pthat, (float)i, (float)weights[getind(*pthat)], (float)*bin, centrWeight,
-	       (float)weights[getind(*pthat)]*centrWeight, NaN,
+	vdj = {*pthat, (float)i, (float)weights[getind(*pthat)], (float)*bin, 
+         NaN,
 	       NaN,NaN,
 	       NaN,NaN,
 	       NaN,NaN,
@@ -493,6 +488,92 @@ void buildtuplemc(TString code)
   cout<<"Total input entries "<<totentries<<endl;
 
   //making centrality-dependent ntuples
-  PutInCbins(outputfolder, code, {{0,40}, {80,200}});
+  //  PutInCbins(outputfolder, code, {{0,40}, {80,200}});
 
+}
+
+void update(TString filename, vector<float> cweights)
+{
+  auto f = new TFile(filename,"update");
+
+  auto nt = (TTree *)f->Get("nt");
+
+  float weight,cweight,pthatweight;
+  float bin;
+  TBranch *cw, *w;
+  if (PbPb) {
+    cw =  nt->Branch("centrWeight",&cweight);
+    nt->SetBranchAddress("bin",&bin);
+  }
+  w =  nt->Branch("weight",&weight);
+  nt->SetBranchAddress("pthatweight",&pthatweight);
+
+  int n = nt->GetEntries();
+  int onep = n/100;
+  for (int i=0;i<n;i++) {
+    if (i%onep==0) cout<<i/onep<<endl;
+    nt->GetEntry(i);
+
+
+    cweight=PbPb ? cweights[bin-1] : 1;
+    weight=pthatweight*cweight;
+
+    if (PbPb)
+      cw->Fill();
+    w->Fill();
+  }
+
+  nt->Write();
+
+  f->Close();
+
+
+}
+
+
+void buildtuplemc(TString code)
+{
+  if (!mc(code)) { cout<<"Not mc: "<<code<<", exiting..."<<endl; return;}
+
+  PbPb = isPbPb(code);
+  sample = getSample(code);
+  jettree = getjettree(code);
+  subTag = subTagging(code);
+
+  Init();
+
+  outputfilenamedj = outputfolder+"/"+code+"_djt.root";
+  outputfilenameinc = outputfolder+"/"+code+"_inc.root";
+  outputfilenameevt = outputfolder+"/"+code+"_evt.root";
+
+
+
+  //if (!PbPb) { do_buildtuplemc(code); return; }
+
+  //PbPb
+  //make sure folder exists!!!
+  
+  TString datafile = outputfolder+"dtPbj40akVs4PF_djt.root";
+  if (PbPb && !file_exist(datafile)) {
+    cout<<"Data file "<<outputfolder+datafile<<" doesn\'t exist. How do I calculate the centrality?"<<endl;
+    return;
+  }
+  //make ntuples without centrality weight
+  do_buildtuplemc(code);
+  
+  vector<float> cweight(201);
+  for (int i=0;i<cweight.size();i++) cweight[i]=1;
+
+  //build the centrality file
+  if (PbPb) cweight = centrWeighting(datafile, outputfilenamedj);
+  for (int i=0;i<cweight.size();i++) cout<<i<<" - "<<cweight[i]<<endl;;
+  
+
+  update(outputfilenamedj,cweight);
+  update(outputfilenameinc,cweight);
+  update(outputfilenameevt,cweight);
+
+  //repeat with good centrality file
+  //do_buildtuplemc(code,centralityfile);
+  
 }

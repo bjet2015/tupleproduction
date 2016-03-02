@@ -5,9 +5,17 @@ bool mc(TString code)
   TString s = TString(code(0,2));
   if (s=="mc") return true;
   if (s=="dt") return false;
+  if (s=="mB") return true;
+  if (s=="dB") return false;
 
   cout<<"Wrong name, neither dt nor mc : "<<s<<endl;
   return false;
+}
+
+bool subTagging(TString code)
+{
+  TString s = TString(code(0,2));
+  return s=="mB" || s=="dB";
 }
 
 bool dt(TString code)
@@ -15,6 +23,8 @@ bool dt(TString code)
   TString s = TString(code(0,2));
   if (s=="dt") return true;
   if (s=="mc") return false;
+  if (s=="dB") return true;
+  if (s=="mB") return false;
 
   cout<<"Wrong name, neither dt nor mc : "<<s<<endl;
   return false;
