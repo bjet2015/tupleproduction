@@ -11,8 +11,8 @@
 #include "centrWeighting.h"
 
 bool PbPb = false;
+bool newFlavorProcess = false;
 TString samplesfolder, jettree,sample;
-bool subTag = false; //IF TRUE - SUBLEDING JET MUST BE TAGGED!!!
 vector<TString> subfoldernames;
 vector<int> pthats;
 vector<double> CS;
@@ -278,9 +278,19 @@ bool file_exist(const char *fileName)
 }
 
 
-float getGSP(TTreeReaderArray<bool> *&refparton_isGSP, int j)
+float getFlavorProcess(TTreeReaderArray<bool> *&refparton_isGSP, TTreeReaderArray<int> *&refparton_flavorProcess, int index)
 {
-  return sample!="qp8" && sample!="bp8" ? (float)(*refparton_isGSP)[j] : -1;
+    //these two samples have no info about primary
+  if (sample=="qp8" ||sample=="bp8") return -1;
+
+
+  if (newFlavorProcess) {
+    return (*refparton_flavorProcess)[index];
+  } else {
+    bool gsp = (*refparton_isGSP)[index];
+    if (!gsp) return 1;
+    else return 6;
+  }
 }
 
 
@@ -292,12 +302,15 @@ void do_buildtuplemc(TString code)
   int totentries = 0;
 
   //put only pthat weight
-  TString djvars = TString("pthat:pthatbin:pthatweight:bin:dijet:subid0:subid1:refpt0:refpt1:rawpt0:")
-      +"rawpt1:jtpt0:jtpt1:jtphi0:jtphi1:jteta0:jteta1:discr_csvSimple0:discr_csvSimple1:refparton_flavorForB0:"
-      +"refparton_flavorForB1:refparton_isGSP0:refparton_isGSP1:pairCode:svtxm0:svtxm1:discr_prob0:discr_prob1:svtxdls0:"
-      +"svtxdls1:svtxpt0:svtxpt1:svtxntrk0:svtxntrk1:nsvtx0:nsvtx1:nselIPtrk0:nselIPtrk1";
-  TString incvars = TString("pthat:pthatbin:pthatweight:bin:subid:refpt:rawpt:jtpt:jtphi:jteta:discr_csvSimple:")
-      +"refparton_flavorForB:refparton_isGSP:svtxm:discr_prob:svtxdls:svtxpt:svtxntrk:nsvtx:nselIPtrk";
+  TString djvars = TString("run:lumi:event:pthat:pthatsample:sampleEventNumber:pthatweight:bin:vz:bProdCode:dijet:bkgLeadingJet:")+
+      "subid1:refpt1:rawpt1:jtpt1:jtphi1:jteta1:discr_csvSimple1:refparton_flavorForB1:refparton_flavorProcess1:svtxm1:discr_prob1:svtxdls1:svtxpt1:svtxntrk1:nsvtx1:nselIPtrk1:"+
+      "subid2:refpt2:rawpt2:jtpt2:jtphi2:jteta2:discr_csvSimple2:refparton_flavorForB2:refparton_flavorProcess2:svtxm2:discr_prob2:svtxdls2:svtxpt2:svtxntrk2:nsvtx2:nselIPtrk2:dphi21:pairCode21:"+
+      "subid3:refpt3:rawpt3:jtpt3:jtphi3:jteta3:discr_csvSimple3:refparton_flavorForB3:refparton_flavorProcess3:svtxm3:discr_prob3:svtxdls3:svtxpt3:svtxntrk3:nsvtx3:nselIPtrk3:dphi31:dphi32:pairCode31:pairCode32:"+
+      "SLord:subidSL:refptSL:rawptSL:jtptSL:jtphiSL:jtetaSL:discr_csvSimpleSL:refparton_flavorForBSL:refparton_flavorProcessSL:svtxmSL:discr_probSL:svtxdlsSL:svtxptSL:svtxntrkSL:nsvtxSL:nselIPtrkSL:dphiSL1:pairCodeSL1";
+
+
+  TString incvars = TString("run:lumi:event:pthat:pthatsample:pthatweight:bin:subid:refpt:rawpt:jtpt:jtphi:jteta:discr_csvSimple:")
+      +"refparton_flavorForB:isPrimary:refparton_flavorProcess:svtxm:discr_prob:svtxdls:svtxpt:svtxntrk:nsvtx:nselIPtrk";
 
   //now fill histos
   TFile *foutdj = new TFile(outputfilenamedj,"recreate");
@@ -333,9 +346,23 @@ void do_buildtuplemc(TString code)
     TTreeReaderArray<float> discr_csvSimple(reader, "discr_csvSimple");
     TTreeReaderArray<int> refparton_flavorForB(reader, "refparton_flavorForB");
     TTreeReaderArray<bool> *refparton_isGSP;
-    if (sample!="qp8" && sample!="bp8")
+
+    newFlavorProcess = !PbPb && sample=="bjt";
+
+    if (sample!="qp8" && sample!="bp8" && !newFlavorProcess)
       refparton_isGSP = new TTreeReaderArray<bool>(reader, "refparton_isGSP");
-    
+    TTreeReaderArray<int> *refparton_flavorProcess;
+    TTreeReaderValue<int> *bProdCode;
+
+
+
+    if (newFlavorProcess) {
+      bProdCode = new TTreeReaderValue<int>(reader, "bProdCode");
+      refparton_flavorProcess = new TTreeReaderArray<int>(reader, "refparton_flavorProcess");
+    }
+
+
+
     TTreeReaderArray<float> discr_prob(reader, "discr_prob");
     TTreeReaderArray<float> svtxm(reader, "svtxm");
     TTreeReaderArray<float> svtxdls(reader, "svtxdls");
@@ -348,6 +375,10 @@ void do_buildtuplemc(TString code)
     TTreeReader readerevt("hiEvtAnalyzer/HiTree",f);
     TTreeReaderValue<float> vz(readerevt, "vz");
     TTreeReaderValue<int> bin(readerevt, "hiBin");
+    TTreeReaderValue<unsigned int> run(readerevt, "run");
+    TTreeReaderValue<unsigned int> lumi(readerevt, "lumi");
+    TTreeReaderValue<unsigned long long> event(readerevt, "evt");
+
 
     int nev = reader.GetEntries(true);
     totentries+=nev;
@@ -360,112 +391,158 @@ void do_buildtuplemc(TString code)
       evCounter++;
 
       if (evCounter%onep==0) {
-	std::cout << std::fixed;
-	TTimeStamp t1; 
-	cout<<" \r"<<evCounter/onep<<"%   "<<" total time "<<(int)round((t1-t0)*nev/(evCounter+.1))<<" s "<<flush;
+  std::cout << std::fixed;
+  TTimeStamp t1; 
+  cout<<" \r"<<evCounter/onep<<"%   "<<" total time "<<(int)round((t1-t0)*nev/(evCounter+.1))<<" s "<<flush;
       }
 
       int b = *bin;
       float centrWeight = 1;//PbPb ? centrWeights[b] : 1;
 
       vector<float> vevt = {*pthat, (float)i, (float)weights[getind(*pthat)], (float)*bin, centrWeight,
-			    (float)weights[getind(*pthat)]*centrWeight};
+          (float)weights[getind(*pthat)]*centrWeight};
       ntevt->Fill(&vevt[0]);
 
 
-      int ind0, ind1; //indices of leading/subleading jets in jet array
-      bool foundLJ=false, foundSJ = false; //found/not found yet, for convenience
+      int ind1=-1, ind2=-1, ind3=-1, indSL=-1; //indices of leading/subleading jets in jet array
+      int SLord = 0;
+      bool foundJ1=false, foundJ2 = false, foundJ3 = false, foundSL = false; //found/not found yet, for convenience
+      bool bkgJ1 = false;
 
-      
-      for (int j=0;j<*nref;j++) {
-        if (abs(jteta[j])>2) continue;
+      if (abs(*vz)<15) //event-level cuts, if not passed all foundXY = false
+        for (int j=0;j<*nref;j++) {
+          if (abs(jteta[j])>2) continue;
 
-    	//for inclusive plots, subid==0 everywhere
-    	if (subid[j]==0) {
-    	  vector<float> vinc = {*pthat, (float)i,(float)weights[getind(*pthat)],(float)*bin,
-          (float)subid[j], refpt[j], rawpt[j],jtpt[j], jtphi[j], jteta[j], discr_csvSimple[j],
-    		  (float)refparton_flavorForB[j], getGSP(refparton_isGSP,j),
-    		  svtxm[j],discr_prob[j],svtxdls[j],svtxpt[j],(float)svtxntrk[j],(float)nsvtx[j],(float)nselIPtrk[j]};
+          //for inclusive plots, subid==0 everywhere
+          if (subid[j]==0) {
+            vector<float> vinc = {(float)*run, (float)*lumi, (float)*event, *pthat, (float)pthats[i],(float)weights[getind(*pthat)],(float)*bin,
+              (float)subid[j], refpt[j], rawpt[j],jtpt[j], jtphi[j], jteta[j], discr_csvSimple[j],
+              (float)refparton_flavorForB[j], getFlavorProcess(refparton_isGSP,refparton_flavorProcess,j),
+              svtxm[j],discr_prob[j],svtxdls[j],svtxpt[j],(float)svtxntrk[j],(float)nsvtx[j],(float)nselIPtrk[j]};
 
-    	  ntinc->Fill(&vinc[0]);
-    	}
+              ntinc->Fill(&vinc[0]);
+            }
 
-      if (!foundLJ && subid[j]==0) { //looking for the leading jet from signal
-          ind0 = j;
-          foundLJ=true;
-          continue;
-        }
-        //take subleading jet if
-        //leading is found and subleading is not :) and
-        //first subleading if no subleading tagging requirement
-        //OR first tagged subleading if subleading tagging required
-        if (foundLJ && !foundSJ && (!subTag || (subTag && discr_csvSimple[j]>0.9))) {
-            ind1 = j;
-            foundSJ = true;
-        }
-      }
+            //if background jumped above signal (or highest signal is outside acceptance) - then it's a "bad" event
+            //this condition is propagated on every clause b/c we still need to loop jets for inclusive ntuple above
+            if (!foundJ1 && subid[j]!=0) bkgJ1 = true;
+
+          //looking for the leading jet from signal
+            if (!bkgJ1 && !foundJ1 && subid[j]==0) { 
+              ind1 = j;
+              foundJ1=true;
+            } else
+            if (!bkgJ1 && foundJ1 && !foundJ2) {
+              ind2 = j;
+              foundJ2 = true;
+            } else
+            if (!bkgJ1 && foundJ1 && foundJ2 && !foundJ3) {
+              ind3 = j;
+              foundJ3 = true;
+            }
+
+          //we need ordinal number of SL jets, so counting until found
+          //indSL != SLord because some jets are not in acceptance region
+            if (!bkgJ1 && !foundSL) SLord++;
+
+          //ind1!=j otherwise SL will be = J1
+            if (!bkgJ1 && foundJ1 && ind1!=j && !foundSL && discr_csvSimple[j]>0.9) {
+              indSL = j;
+              foundSL = true;
+            }
+          }
 
 
-      if (nonoverlapping && getind(*pthat)!=i) continue;
+
+      //if (nonoverlapping && getind(*pthat)!=i) continue;
 
       vector<float> vdj;
 
-      if (foundLJ && foundSJ)
-        vdj = {*pthat,(float)i, (float)weights[getind(*pthat)], (float)*bin, 
-         1, //1 = dijet
-	       (float)subid[ind0], (float)subid[ind1],
-	       refpt[ind0], refpt[ind1],
-	       rawpt[ind0], rawpt[ind1],
-	       jtpt[ind0], jtpt[ind1],
-	       jtphi[ind0], jtphi[ind1],
-	       jteta[ind0], jteta[ind1],
-	       discr_csvSimple[ind0], discr_csvSimple[ind1],
-	       (float)refparton_flavorForB[ind0], (float)refparton_flavorForB[ind1],
-	       getGSP(refparton_isGSP,ind0),
-	       getGSP(refparton_isGSP,ind1),
-	       (float)getPairCode(refparton_flavorForB[ind0],refparton_flavorForB[ind1]),
-	       svtxm[ind0],svtxm[ind1],discr_prob[ind0],discr_prob[ind1],
-	       svtxdls[ind0],svtxdls[ind1], svtxpt[ind0], svtxpt[ind1],
-	       (float)svtxntrk[ind0],(float)svtxntrk[ind1],(float)nsvtx[ind0],(float)nsvtx[ind1],
-	       (float)nselIPtrk[ind0],(float)nselIPtrk[ind1]};
-      else if (foundLJ && !foundSJ) 
-        vdj = {*pthat, (float)i, (float)weights[getind(*pthat)], (float)*bin, 
-         0, //0 = monojet
-	       (float)subid[ind0], NaN,
-	       refpt[ind0], NaN,
-	       rawpt[ind0], NaN,
-	       jtpt[ind0], NaN,
-	       jtphi[ind0], NaN,
-	       jteta[ind0], NaN,
-	       discr_csvSimple[ind0], NaN,
-	       (float)refparton_flavorForB[ind0], NaN,
-	       getGSP(refparton_isGSP,ind0),NaN,//(float)(*refparton_isGSP)[ind0],NaN,
-	       NaN,
-	       svtxm[ind0],NaN,discr_prob[ind0],NaN,
-	       svtxdls[ind0],NaN, svtxpt[ind0], NaN,
-	       (float)svtxntrk[ind0],NaN,(float)nsvtx[ind0],NaN,
-	       (float)nselIPtrk[ind0],NaN};
-      if (!foundLJ || (abs(*vz)>15)) {
-	vdj = {*pthat, (float)i, (float)weights[getind(*pthat)], (float)*bin, 
-         NaN,
-	       NaN,NaN,
-	       NaN,NaN,
-	       NaN,NaN,
-	       NaN,NaN,
-	       NaN,NaN,
-	       NaN,NaN,
-	       NaN,NaN,
-	       NaN,NaN,
-	       NaN,NaN,
-               NaN,
-	       NaN, NaN,NaN,NaN,
-	       NaN, NaN,NaN,NaN,
-	       NaN, NaN,NaN,NaN,
-	       NaN,NaN};
-      }
+      vdj = {(float)*run, (float)*lumi, (float)*event, 
+        *pthat,(float)pthats[i], (float)evCounter-1, (float)weights[getind(*pthat)], (float)*bin, *vz,
+        newFlavorProcess ? (float)*(*bProdCode) : NaN,
+        foundJ1 && foundJ2 ? (float)1 : (float)0, (float)bkgJ1,
+
+        foundJ1 ? (float)subid[ind1] : NaN,
+        foundJ1 ? refpt[ind1] : NaN,
+        foundJ1 ? rawpt[ind1] : NaN,
+        foundJ1 ? jtpt[ind1] : NaN,
+        foundJ1 ? jtphi[ind1] : NaN,
+        foundJ1 ? jteta[ind1] : NaN,
+        foundJ1 ? discr_csvSimple[ind1] : NaN,
+        foundJ1 ? (float)refparton_flavorForB[ind1] : NaN,
+        foundJ1 ? getFlavorProcess(refparton_isGSP,refparton_flavorProcess,ind1) : NaN,
+        foundJ1 ? svtxm[ind1] : NaN,
+        foundJ1 ? discr_prob[ind1] : NaN,
+        foundJ1 ? svtxdls[ind1] : NaN,
+        foundJ1 ? svtxpt[ind1] : NaN,
+        foundJ1 ? (float)svtxntrk[ind1] : NaN,
+        foundJ1 ? (float)nsvtx[ind1] : NaN,
+        foundJ1 ? (float)nselIPtrk[ind1] : NaN,
+    
+        foundJ2 ? (float)subid[ind2] : NaN,
+        foundJ2 ? refpt[ind2] : NaN,
+        foundJ2 ? rawpt[ind2] : NaN,
+        foundJ2 ? jtpt[ind2] : NaN,
+        foundJ2 ? jtphi[ind2] : NaN,
+        foundJ2 ? jteta[ind2] : NaN,
+        foundJ2 ? discr_csvSimple[ind2] : NaN,
+        foundJ2 ? (float)refparton_flavorForB[ind2] : NaN,
+        foundJ2 ? getFlavorProcess(refparton_isGSP,refparton_flavorProcess,ind2) : NaN,
+        foundJ2 ? svtxm[ind2] : NaN,
+        foundJ2 ? discr_prob[ind2] : NaN,
+        foundJ2 ? svtxdls[ind2] : NaN, 
+        foundJ2 ? svtxpt[ind2] : NaN,
+        foundJ2 ? (float)svtxntrk[ind2] : NaN,
+        foundJ2 ? (float)nsvtx[ind2] : NaN,
+        foundJ2 ? (float)nselIPtrk[ind2] : NaN,
+        foundJ2 && foundJ1 ? acos(cos(jtphi[ind2]-jtphi[ind1])) : NaN,
+        foundJ2 && foundJ1 ? (float)getPairCode(refparton_flavorForB[ind2],refparton_flavorForB[ind1]) : NaN,
+    
+        foundJ3 ? (float)subid[ind3] : NaN,
+        foundJ3 ? refpt[ind3] : NaN,
+        foundJ3 ? rawpt[ind3] : NaN,
+        foundJ3 ? jtpt[ind3] : NaN,
+        foundJ3 ? jtphi[ind3] : NaN,
+        foundJ3 ? jteta[ind3] : NaN,
+        foundJ3 ? discr_csvSimple[ind3] : NaN,
+        foundJ3 ? (float)refparton_flavorForB[ind3] : NaN,
+        foundJ3 ? getFlavorProcess(refparton_isGSP,refparton_flavorProcess,ind3) : NaN,
+        foundJ3 ? svtxm[ind3] : NaN,
+        foundJ3 ? discr_prob[ind3] : NaN,
+        foundJ3 ? svtxdls[ind3] : NaN, 
+        foundJ3 ? svtxpt[ind3] : NaN,
+        foundJ3 ? (float)svtxntrk[ind3] : NaN,
+        foundJ3 ? (float)nsvtx[ind3] : NaN,
+        foundJ3 ? (float)nselIPtrk[ind3] : NaN,
+        foundJ3 && foundJ1 ? acos(cos(jtphi[ind3]-jtphi[ind1])) : NaN,
+        foundJ3 && foundJ2 ? acos(cos(jtphi[ind3]-jtphi[ind2])) : NaN,
+        foundJ3 && foundJ1 ? (float)getPairCode(refparton_flavorForB[ind3],refparton_flavorForB[ind1]) : NaN,
+        foundJ3 && foundJ2 ? (float)getPairCode(refparton_flavorForB[ind3],refparton_flavorForB[ind2]) : NaN,
+
+        foundSL ? (float)SLord : NaN,
+        foundSL ? (float)subid[indSL] : NaN,
+        foundSL ? refpt[indSL] : NaN,
+        foundSL ? rawpt[indSL] : NaN,
+        foundSL ? jtpt[indSL] : NaN,
+        foundSL ? jtphi[indSL] : NaN,
+        foundSL ? jteta[indSL] : NaN,
+        foundSL ? discr_csvSimple[indSL] : NaN,
+        foundSL ? (float)refparton_flavorForB[indSL] : NaN,
+        foundSL ? getFlavorProcess(refparton_isGSP,refparton_flavorProcess,indSL) : NaN,
+        foundSL ? svtxm[indSL] : NaN,
+        foundSL ? discr_prob[indSL] : NaN,
+        foundSL ? svtxdls[indSL] : NaN, 
+        foundSL ? svtxpt[indSL] : NaN,
+        foundSL ? (float)svtxntrk[indSL] : NaN,
+        foundSL ? (float)nsvtx[indSL] : NaN,
+        foundSL ? (float)nselIPtrk[indSL] : NaN,
+        foundSL && foundJ1 ? acos(cos(jtphi[indSL]-jtphi[ind1])) : NaN,
+        foundSL && foundJ1 ? (float)getPairCode(refparton_flavorForB[indSL],refparton_flavorForB[ind1]) : NaN
+
+      };
       
-      if (vdj.size()>0)
-        ntdj->Fill(&vdj[0]);
+      ntdj->Fill(&vdj[0]);
     }
     
     f->Close();
@@ -494,6 +571,7 @@ void do_buildtuplemc(TString code)
 
 void update(TString filename, vector<float> cweights)
 {
+  cout<<"Updating reweighting..."<<endl;
   auto f = new TFile(filename,"update");
 
   auto nt = (TTree *)f->Get("nt");
@@ -511,7 +589,7 @@ void update(TString filename, vector<float> cweights)
   int n = nt->GetEntries();
   int onep = n/100;
   for (int i=0;i<n;i++) {
-    if (i%onep==0) cout<<i/onep<<endl;
+    //if (i%onep==0) cout<<i/onep<<endl;
     nt->GetEntry(i);
 
 
@@ -538,7 +616,6 @@ void buildtuplemc(TString code)
   PbPb = isPbPb(code);
   sample = getSample(code);
   jettree = getjettree(code);
-  subTag = subTagging(code);
 
   Init();
 
@@ -566,7 +643,7 @@ void buildtuplemc(TString code)
 
   //build the centrality file
   if (PbPb) cweight = centrWeighting(datafile, outputfilenamedj);
-  for (int i=0;i<cweight.size();i++) cout<<i<<" - "<<cweight[i]<<endl;;
+  //for (int i=0;i<cweight.size();i++) cout<<i<<" - "<<cweight[i]<<endl;;
   
 
   update(outputfilenamedj,cweight);
