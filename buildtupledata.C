@@ -6,6 +6,7 @@
 
 #include "parsecode.h"
 
+
 TString jettree;
 vector<TString> subfoldernames;
 
@@ -109,8 +110,8 @@ vector<float> calculateWeightsBjet(TString filenamedj)
   TFile *f0 = new TFile(filenamedj);
   auto nt = (TTree *)f0->Get("nt");
 
-  int Njt80 = nt->GetEntries("goodevent && hltCSV80");
-  int Njt80and60 = nt->GetEntries("goodevent && hltCSV80 && hltCSV60");
+  int Njt80 = nt->GetEntries("triggermatched && hltCSV80");
+  int Njt80and60 = nt->GetEntries("triggermatched && hltCSV80 && hltCSV60");
 
   vector<float> w = {(float)Njt80/Njt80and60, 1};
   return w;
@@ -120,19 +121,13 @@ vector<float> calculateWeightsBjet(TString filenamedj)
 
 double getweight(TString sample, int trig60, int trig80)
 {
-  //  if (!trig60 && !trig80) return 0;
-  if (sample == "pp_PFLowPt" && trig60) return weights[0];
-  if (sample == "pp_PFHighPt" && trig80) return 1;
+  // if (sample == "pp_PFLowPt" && trig60 && !trig80) return weights[0];
+  // if (sample == "pp_PFHighPt" && trig80) return 1;
+  if (sample == "pp_PFLowPt") return 0;
+  if (sample == "pp_PFHighPt") return 1;
 
-  return 0;
-}
 
-double getweightbjet(int csv60, int csv80)
-{
-  if (csv80) return weights[1];
-  if (csv60 && !csv80) return weights[0];
-
-  return 0;
+  return -999;
 }
 
 bool matches(float jtphi1, float jteta1, float jtphi2, float jteta2)
@@ -140,7 +135,7 @@ bool matches(float jtphi1, float jteta1, float jtphi2, float jteta2)
   return (jteta1-jteta2)*(jteta1-jteta2)/0.6/0.6 + (jtphi1-jtphi2)*(jtphi1-jtphi2)/0.3/0.3<1.0;
 } 
 
-bool goodBtaggedEvent(float leadjtphi, float leadjteta, vector<Double_t> &trigpt, vector<Double_t> &trigphi, vector<Double_t> &trigeta)
+bool triggeredLeadingJet(float leadjtphi, float leadjteta, vector<Double_t> &trigpt, vector<Double_t> &trigphi, vector<Double_t> &trigeta)
 {
   //b-tagged jets are doubled in trigger array so b-jet cannot be the only one
   if (trigpt.size()==1) return false; 
@@ -187,7 +182,7 @@ void updatePbPbBtriggerweight(TString filename, vector<float> w)
   auto nt = (TTree *)f->Get("nt");
 
   float csv60, csv80;
-  float goodevent;
+  float triggermatched;
   float weight;
   TBranch *bw;
 
@@ -195,7 +190,7 @@ void updatePbPbBtriggerweight(TString filename, vector<float> w)
 
   nt->SetBranchAddress("hltCSV60",&csv60);
   nt->SetBranchAddress("hltCSV80",&csv80);
-  nt->SetBranchAddress("goodevent",&goodevent);
+  nt->SetBranchAddress("triggermatched",&triggermatched);
   
   int n = nt->GetEntries();
   int onep = n/100;
@@ -205,8 +200,8 @@ void updatePbPbBtriggerweight(TString filename, vector<float> w)
 
 
     weight = 0;
-    if (goodevent && csv80) weight = w[1];
-    if (goodevent && csv60 && !csv80) weight = w[0];
+    if (triggermatched && csv80) weight = w[1];
+    if (triggermatched && csv60 && !csv80) weight = w[0];
 
     bw->Fill();
   }
@@ -261,6 +256,16 @@ void buildtupledata(TString code)//(TString collision = "PbPbBJet", TString jeta
   TString outputfilenameinc = outputfolder+"/"+code+"_inc.root";
   TString outputfilenameevt = outputfolder+"/"+code+"_evt.root";
 
+  TString djvars = TString("run:lumi:event:prew:triggermatched:bin:hltCSV60:hltCSV80:hltCaloJet40:hltCaloJet60:hltCaloJet80:hltPFJet60:hltPFJet80:dijet:")+
+      "rawpt1:jtpt1:jtphi1:jteta1:discr_csvSimple1:svtxm1:discr_prob1:svtxdls1:svtxpt1:svtxntrk1:nsvtx1:nselIPtrk1:"+
+      "rawpt2:jtpt2:jtphi2:jteta2:discr_csvSimple2:svtxm2:discr_prob2:svtxdls2:svtxpt2:svtxntrk2:nsvtx2:nselIPtrk2:dphi21:"+
+      "rawpt3:jtpt3:jtphi3:jteta3:discr_csvSimple3:svtxm3:discr_prob3:svtxdls3:svtxpt3:svtxntrk3:nsvtx3:nselIPtrk3:dphi31:dphi32:"+
+      "SLord:rawptSL:jtptSL:jtphiSL:jtetaSL:discr_csvSimpleSL:svtxmSL:discr_probSL:svtxdlsSL:svtxptSL:svtxntrkSL:nsvtxSL:nselIPtrkSL:dphiSL1";
+
+
+
+
+
   for (auto w:weights) cout<<w<<"\t";
   cout<<endl;
 
@@ -268,7 +273,8 @@ void buildtupledata(TString code)//(TString collision = "PbPbBJet", TString jeta
 
   //now fill histos
   TFile *foutdj = new TFile(outputfilenamedj,"recreate");
-  TNtuple *ntdj = new TNtuple("nt","ntdj","prew:goodevent:bin:hltCSV60:hltCSV80:hltCaloJet40:hltCaloJet60:hltCaloJet80:hltPFJet60:hltPFJet80:dijet:rawpt0:rawpt1:jtpt0:jtpt1:jtphi0:jtphi1:jteta0:jteta1:discr_csvSimple0:discr_csvSimple1:svtxm0:svtxm1:discr_prob0:discr_prob1:svtxdls0:svtxdls1:svtxpt0:svtxpt1:svtxntrk0:svtxntrk1:nsvtx0:nsvtx1:nselIPtrk0:nselIPtrk1");
+  TNtuple *ntdj = new TNtuple("nt","ntdj",djvars);
+
   TFile *foutinc = new TFile(outputfilenameinc,"recreate");
   TNtuple *ntinc = new TNtuple("nt","ntinc","prew:goodevent:bin:hltCSV60:hltCSV80:hltCaloJet40:hltCaloJet60:hltCaloJet80:hltPFJet60:hltPFJet80:rawpt:jtpt:jtphi:jteta:discr_csvSimple:svtxm:discr_prob:svtxdls:svtxpt:svtxntrk:nsvtx:nselIPtrk");
   TFile *foutevt = new TFile(outputfilenameevt,"recreate");
@@ -300,9 +306,9 @@ void buildtupledata(TString code)//(TString collision = "PbPbBJet", TString jeta
     TTreeReaderArray<int> nsvtx(reader, "nsvtx");
     TTreeReaderArray<int> nselIPtrk(reader, "nselIPtrk");
 
-    TTreeReaderArray<float> muMax(reader, "muMax");
-    TTreeReaderArray<float> muMaxTRK(reader, "muMaxTRK");
-    TTreeReaderArray<float> muMaxGBL(reader, "muMaxGBL");
+    // TTreeReaderArray<float> muMax(reader, "muMax");
+    // TTreeReaderArray<float> muMaxTRK(reader, "muMaxTRK");
+    // TTreeReaderArray<float> muMaxGBL(reader, "muMaxGBL");
 
 
 
@@ -346,17 +352,12 @@ void buildtupledata(TString code)//(TString collision = "PbPbBJet", TString jeta
     TTreeReaderValue<vector<Double_t> > csv80eta(readercsv80object, "eta");
     TTreeReaderValue<vector<Double_t> > csv80phi(readercsv80object, "phi");
     
-    // TTreeReader hltObjectTreeCSV60("hltobject/HLT_HIPuAK4CaloBJetCSV60_Eta2p1_v", f);
-    // TTreeReader hltObjectTreeCSV80("hltobject/HLT_HIPuAK4CaloBJetCSV80_Eta2p1_v", f);
-
-    // TTreeReaderValue< vector<Double_t> > pt60(*hltObjectTree, "pt");
-    // TTreeReaderValue< vector<Double_t> > eta60(*hltObjectTree, "eta");
-    // TTreeReaderValue< vector<Double_t> > phi80(*hltObjectTree, "phi");
-
-    
     TTreeReader readerevt("hiEvtAnalyzer/HiTree",f);
     TTreeReaderValue<float> vz(readerevt, "vz");
     TTreeReaderValue<int> bin(readerevt, "hiBin");
+    TTreeReaderValue<unsigned int> run(readerevt, "run");
+    TTreeReaderValue<unsigned int> lumi(readerevt, "lumi");
+    TTreeReaderValue<unsigned long long> event(readerevt, "evt");
     
 
     TTreeReader readerskim("skimanalysis/HltTree",f);
@@ -373,7 +374,7 @@ void buildtupledata(TString code)//(TString collision = "PbPbBJet", TString jeta
     int evCounter = 0;
     TTimeStamp t0;
     
-    //for testing - only 2% of data
+    //for testing - only 10% of data
     //    while (evCounter<10*onep && reader.Next()) {
     //go full file
     while (reader.Next()) {
@@ -400,8 +401,8 @@ void buildtupledata(TString code)//(TString collision = "PbPbBJet", TString jeta
 
       if (!PbPb)
 	weight = getweight(subfoldernames[i], bPFJet60, bPFJet80);
-      //if (PbPb && sample=="bjt")
-//	weight = getweightbjet(*CSV60, *CSV80);
+
+
       if (PbPb && (sample=="j40" || sample=="j4_"))
 	weight = jet40;//only calojet 40
 
@@ -409,79 +410,127 @@ void buildtupledata(TString code)//(TString collision = "PbPbBJet", TString jeta
 
       if (weight==0) continue;
 
+      //good event is vertex cut and noise cuts
       bool goodevent = abs(*vz)<15;
-      for (auto f:filters) {
+      for (auto f:filters) 
 	goodevent&=*(*f);
-      }
+
+      int ind1=-1, ind2=-1, ind3=-1, indSL=-1; //indices of leading/subleading jets in jet array
+      int SLord = 0;
+      bool foundJ1=false, foundJ2 = false, foundJ3 = false, foundSL = false; //found/not found yet, for convenience
+
+      bool triggermatched = false;
+
+      if (goodevent)
+        for (int j=0;j<*nref;j++) {
+          //acceptance selection
+          if (abs(jteta[j])>2) continue;
+          //TODO: add muon cuts
+          //if(muMax[i]/rawpt[i]>0.95) continue;
+          // if( (muMaxTRK[i]-muMaxGBL[i]) / (muMaxTRK[i]+muMaxGBL[i]) > 0.1) continue;
+  
+          if (!foundJ1) { //looking for the leading jet
+              ind1 = j;
+              foundJ1=true;
+              triggermatched = !PbPb || (triggeredLeadingJet(jtphi[j], jteta[j], *csv60pt, *csv60phi, *csv60eta) ||
+                              triggeredLeadingJet(jtphi[j], jteta[j], *csv80pt, *csv80phi, *csv80eta));
+            }else
+            if (foundJ1 && !foundJ2) {
+              ind2 = j;
+              foundJ2 = true;
+            } else
+            if (foundJ1 && foundJ2 && !foundJ3) {
+              ind3 = j;
+              foundJ3 = true;
+            }
+
+          //we need ordinal number of SL jets, so counting until found
+          //indSL != SLord because some jets are not in acceptance region
+            if (!foundSL) SLord++;
+
+          //ind1!=j otherwise SL will be = J1
+            if (foundJ1 && ind1!=j && !foundSL && discr_csvSimple[j]>0.9) {
+              indSL = j;
+              foundSL = true;
+            }  
 
 
-      if (!goodevent) continue; //TODO: check!
-
-      int ind0, ind1; //indices of leading/subleading jets in jet array
-      bool foundLJ=false, foundSJ = false; //found/not found yet, for convenience
-      bool goodBtagevent = false;
-
-      for (int j=0;j<*nref;j++) {
-        //acceptance selection
-        if (abs(jteta[j])>2) continue;
-        //TODO: add muon cuts
-        //if(muMax[i]/rawpt[i]>0.95) continue;
-        // if( (muMaxTRK[i]-muMaxGBL[i]) / (muMaxTRK[i]+muMaxGBL[i]) > 0.1) continue;
 
 
-
-        //fill inclusive jet ntuple for every jet in the acceptance region
-
-
-        if (foundLJ && !foundSJ && (!subTag || (subTag && discr_csvSimple[j]>0.9))) {
-            ind1 = j;
-            foundSJ = true;
+          //at this point foundLJ = true always, so triggermatched is determined
+          vector<float> vinc = {weight, (float)triggermatched, (float) *bin, (float)*CSV60, (float)*CSV80,(float)*CaloJet40, (float)*CaloJet60, (float)*CaloJet80,
+            (float)bPFJet60,(float)bPFJet80, rawpt[j], jtpt[j], jtphi[j], jteta[j], discr_csvSimple[j],svtxm[j],discr_prob[j],
+            svtxdls[j],svtxpt[j],(float)svtxntrk[j],(float)nsvtx[j],(float)nselIPtrk[j]};
+  
+          ntinc->Fill(&vinc[0]);
         }
-
-        if (!foundLJ) { //looking for the leading jet
-            ind0 = j;
-            foundLJ=true;
-            goodBtagevent = goodBtaggedEvent(jtphi[j], jteta[j], *csv60pt, *csv60phi, *csv60eta) ||
-                            goodBtaggedEvent(jtphi[j], jteta[j], *csv80pt, *csv80phi, *csv80eta);
-          }
-
-        //at this point foundLJ = true always, so goodBtagevent is determined
-        vector<float> vinc = {weight, (float)goodBtagevent, (float) *bin, (float)*CSV60, (float)*CSV80,(float)*CaloJet40, (float)*CaloJet60, (float)*CaloJet80,
-          (float)bPFJet60,(float)bPFJet80, rawpt[j], jtpt[j], jtphi[j], jteta[j], discr_csvSimple[j],svtxm[j],discr_prob[j],
-          svtxdls[j],svtxpt[j],(float)svtxntrk[j],(float)nsvtx[j],(float)nselIPtrk[j]};
-
-        ntinc->Fill(&vinc[0]);
-
-
-      }
 
       //fill dijet ntuple
       vector<float> vdj;
-      if (foundLJ && foundSJ)
-        vdj = {weight, (float)goodBtagevent, (float)*bin, (float)*CSV60, (float)*CSV80,(float)*CaloJet40,(float)*CaloJet60, (float)*CaloJet80,(float)bPFJet60,(float)bPFJet80, 1, //1 = dijet
-	       rawpt[ind0], rawpt[ind1],
-	       jtpt[ind0], jtpt[ind1],
-	       jtphi[ind0], jtphi[ind1],
-	       jteta[ind0], jteta[ind1],
-	       discr_csvSimple[ind0], discr_csvSimple[ind1],
-               svtxm[ind0],svtxm[ind1],discr_prob[ind0],discr_prob[ind1],
-               svtxdls[ind0],svtxdls[ind1], svtxpt[ind0], svtxpt[ind1],
-               (float)svtxntrk[ind0],(float)svtxntrk[ind1],(float)nsvtx[ind0],(float)nsvtx[ind1],
-               (float)nselIPtrk[ind0],(float)nselIPtrk[ind1]};
-      else if (foundLJ && !foundSJ)
-        vdj = {weight, (float)goodBtagevent, (float)*bin, (float)*CSV60, (float)*CSV80,(float)*CaloJet40,(float)*CaloJet60, (float)*CaloJet80,(float)bPFJet60,(float)bPFJet80, 0, //0 = monojet
-             rawpt[ind0], NaN,
-             jtpt[ind0], NaN,
-             jtphi[ind0], NaN,
-             jteta[ind0], NaN,
-               discr_csvSimple[ind0], NaN,
-               svtxm[ind0],NaN,discr_prob[ind0],NaN,
-               svtxdls[ind0],NaN, svtxpt[ind0], NaN,
-               (float)svtxntrk[ind0],NaN,(float)nsvtx[ind0],NaN,
-               (float)nselIPtrk[ind0],NaN};
 
-      if (vdj.size()>0)
-        ntdj->Fill(&vdj[0]);
+      vdj = {(float)*run, (float)*lumi, (float)*event, weight, (float)triggermatched, (float)*bin, 
+        (float)*CSV60, (float)*CSV80,(float)*CaloJet40,(float)*CaloJet60, (float)*CaloJet80,(float)bPFJet60,(float)bPFJet80, 
+        foundJ1 && foundJ2 ? (float)1 : (float)0,
+
+        foundJ1 ? rawpt[ind1] : NaN,
+        foundJ1 ? jtpt[ind1] : NaN,
+        foundJ1 ? jtphi[ind1] : NaN,
+        foundJ1 ? jteta[ind1] : NaN,
+        foundJ1 ? discr_csvSimple[ind1] : NaN,
+        foundJ1 ? svtxm[ind1] : NaN,
+        foundJ1 ? discr_prob[ind1] : NaN,
+        foundJ1 ? svtxdls[ind1] : NaN,
+        foundJ1 ? svtxpt[ind1] : NaN,
+        foundJ1 ? (float)svtxntrk[ind1] : NaN,
+        foundJ1 ? (float)nsvtx[ind1] : NaN,
+        foundJ1 ? (float)nselIPtrk[ind1] : NaN,
+
+        foundJ2 ? rawpt[ind2] : NaN,
+        foundJ2 ? jtpt[ind2] : NaN,
+        foundJ2 ? jtphi[ind2] : NaN,
+        foundJ2 ? jteta[ind2] : NaN,
+        foundJ2 ? discr_csvSimple[ind2] : NaN,
+        foundJ2 ? svtxm[ind2] : NaN,
+        foundJ2 ? discr_prob[ind2] : NaN,
+        foundJ2 ? svtxdls[ind2] : NaN, 
+        foundJ2 ? svtxpt[ind2] : NaN,
+        foundJ2 ? (float)svtxntrk[ind2] : NaN,
+        foundJ2 ? (float)nsvtx[ind2] : NaN,
+        foundJ2 ? (float)nselIPtrk[ind2] : NaN,
+        foundJ2 && foundJ1 ? acos(cos(jtphi[ind2]-jtphi[ind1])) : NaN,
+    
+        foundJ3 ? rawpt[ind3] : NaN,
+        foundJ3 ? jtpt[ind3] : NaN,
+        foundJ3 ? jtphi[ind3] : NaN,
+        foundJ3 ? jteta[ind3] : NaN,
+        foundJ3 ? discr_csvSimple[ind3] : NaN,
+        foundJ3 ? svtxm[ind3] : NaN,
+        foundJ3 ? discr_prob[ind3] : NaN,
+        foundJ3 ? svtxdls[ind3] : NaN, 
+        foundJ3 ? svtxpt[ind3] : NaN,
+        foundJ3 ? (float)svtxntrk[ind3] : NaN,
+        foundJ3 ? (float)nsvtx[ind3] : NaN,
+        foundJ3 ? (float)nselIPtrk[ind3] : NaN,
+        foundJ3 && foundJ1 ? acos(cos(jtphi[ind3]-jtphi[ind1])) : NaN,
+        foundJ3 && foundJ2 ? acos(cos(jtphi[ind3]-jtphi[ind2])) : NaN,
+
+        foundSL ? (float)SLord : NaN,
+        foundSL ? rawpt[indSL] : NaN,
+        foundSL ? jtpt[indSL] : NaN,
+        foundSL ? jtphi[indSL] : NaN,
+        foundSL ? jteta[indSL] : NaN,
+        foundSL ? discr_csvSimple[indSL] : NaN,
+        foundSL ? svtxm[indSL] : NaN,
+        foundSL ? discr_prob[indSL] : NaN,
+        foundSL ? svtxdls[indSL] : NaN, 
+        foundSL ? svtxpt[indSL] : NaN,
+        foundSL ? (float)svtxntrk[indSL] : NaN,
+        foundSL ? (float)nsvtx[indSL] : NaN,
+        foundSL ? (float)nselIPtrk[indSL] : NaN,
+        foundSL && foundJ1 ? acos(cos(jtphi[indSL]-jtphi[ind1])) : NaN};
+
+
+      ntdj->Fill(&vdj[0]);
 
 
 

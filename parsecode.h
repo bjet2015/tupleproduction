@@ -1,4 +1,18 @@
 #include "TString.h"
+#include "TTree.h"
+#include "TFile.h"
+#include <iostream>
+#include "TSystemDirectory.h"
+#include "TSystemFile.h"
+#include "TRegexp.h"
+#include "TNtuple.h"
+#include "TTreeReaderArray.h"
+#include "TTreeReaderValue.h"
+#include "TTreeReader.h"
+#include "TTimeStamp.h"
+#include "TSystem.h"
+
+using namespace std;
 
 bool mc(TString code)
 {
