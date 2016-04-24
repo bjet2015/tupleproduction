@@ -18,6 +18,8 @@ TString samplesfolder="/data_CMS/cms/mnguyen/bJet2015/data/";
 
 const int NaN = -999;
 
+const float hiHFcut = 5500;
+
 TTree *GetTree(TFile *f, TString treename)
 {
   TTree *t = (TTree *)f->Get(treename);
@@ -148,11 +150,19 @@ void Init(bool PbPb, TString sample)
     calculateWeights();
   }
   else if (PbPb && sample=="bjt") {
-    subfoldernames = {"PbPb_BJetSD/constSubV2"};
+    subfoldernames = {"PbPb_BJetSD/puTowerExclLimitV2/0000","PbPb_BJetSD/puTowerExclLimitV2/0001","PbPb_BJetSD/puTowerExclLimitV2/0002"};
   }
   else if (PbPb && sample=="j60") {
-    subfoldernames = {"PbPb_Jet60"};
-    weights = {1.};
+    subfoldernames = {"PbPb_Jet6080/puTowerExclLimitV2/0000","PbPb_Jet6080/puTowerExclLimitV2/0001","PbPb_Jet6080/puTowerExclLimitV2/0002"};
+    weights = {1.,1.,1.};
+  }
+  // else if (PbPb && sample=="j60") {
+  //   subfoldernames = {"PbPb_Jet60"};
+  //   weights = {1.};
+  // }
+  else if (PbPb && sample=="j80") {
+    subfoldernames = {"PbPb_Jet6080/puTowerExclLimitV2/0000","PbPb_Jet6080/puTowerExclLimitV2/0001","PbPb_Jet6080/puTowerExclLimitV2/0002"};
+    weights = {1.,1.,1.};
   }
   // else if (PbPb && sample=="j4_") {
   //   subfoldernames = {"PbPb_Jet40/oldProd"};
@@ -211,6 +221,7 @@ void updateweight(TString filename)
 
   bw =  nt->Branch("weight",&weight);
   nt->SetBranchAddress("prew",&prew);
+
   
   int n = nt->GetEntries();
   int onep = n/100;
@@ -408,16 +419,23 @@ void buildtupledata(TString code)//(TString collision = "PbPbBJet", TString jeta
 
 
       if (PbPb && sample=="j60")
-        weight = *CaloJet60;//only calojet 40
+        weight = *CaloJet60;
+
+      if (PbPb && sample=="j80")
+        weight = *CaloJet80 && !*CaloJet60;
 
       ntevt->Fill(weight, *bin, *vz, *hiHF, *CSV60, *CSV80);
 
-      if (weight==0) continue;
-
       //good event is vertex cut and noise cuts
-      bool goodevent = abs(*vz)<15;
+      bool goodevent = abs(*vz)<15 && *hiHF<hiHFcut;
       for (auto f:filters) 
         goodevent&=*(*f);
+
+      if (!goodevent) weight = 0;
+
+
+      if (weight==0) continue;
+
 
       int ind1=-1, ind2=-1, ind3=-1, indSL=-1; //indices of leading/subleading jets in jet array
       int indTrigCSV60=-1, indTrigCSV80=-1, indTrigCalo60=-1, indTrigCalo80=-1;
@@ -429,7 +447,7 @@ void buildtupledata(TString code)//(TString collision = "PbPbBJet", TString jeta
       if (goodevent)
         for (int j=0;j<*nref;j++) {
           //acceptance selection
-          if (abs(jteta[j])>1.5) continue;
+          if (abs(jteta[j])>2.0) continue;
           //muon cuts
           if (PbPb) {
             if((*muMax)[j]/rawpt[j]>0.95) continue;
@@ -598,6 +616,6 @@ void buildtupledata(TString code)//(TString collision = "PbPbBJet", TString jeta
     updateweight(outputfilenamedj);
     updateweight(outputfilenameinc);
     updateweight(outputfilenameevt);
-    }
+  }
 
 }

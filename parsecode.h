@@ -91,7 +91,7 @@ TString sub(TString code)
 {
   TString a = algo(code);
   TString s = TString(a(2,2));
-  if (s=="Pu" || s=="Vs") return s;
+  if (s=="Pu" || s=="Vs" || s=="Cs") return s;
   
   //  cout<<"Unknown subtraction"<<endl; 
   return "no";

@@ -365,6 +365,7 @@ void do_buildtuplemc(TString code)
 
   //put only pthat weight
   TString djvars = TString("run:lumi:event:hltCaloJet40:hltCaloJet60:hltCaloJet80:hltCSV60:hltCSV80:pthat:pthatsample:sampleEventNumber:pthatweight:bin:vz:hiHF:bProdCode:dijet:bkgLeadingJet:")+
+      "genpt1:geneta1:genphi1:gensubid:"+
       "subid1:refpt1:rawpt1:jtpt1:jtphi1:jteta1:discr_csvV1_1:refparton_flavorForB1:refparton_flavorProcess1:svtxm1:discr_prob1:svtxdls1:svtxpt1:svtxntrk1:nsvtx1:nselIPtrk1:"+
       "subid2:refpt2:rawpt2:jtpt2:jtphi2:jteta2:discr_csvV1_2:refparton_flavorForB2:refparton_flavorProcess2:svtxm2:discr_prob2:svtxdls2:svtxpt2:svtxntrk2:nsvtx2:nselIPtrk2:dphi21:pairCode21:"+
       "subid3:refpt3:rawpt3:jtpt3:jtphi3:jteta3:discr_csvV1_3:refparton_flavorForB3:refparton_flavorProcess3:svtxm3:discr_prob3:svtxdls3:svtxpt3:svtxntrk3:nsvtx3:nselIPtrk3:dphi31:dphi32:pairCode31:pairCode32:"+
@@ -408,7 +409,16 @@ void do_buildtuplemc(TString code)
     TTreeReaderArray<float> jteta(reader, "jteta");
     TTreeReaderArray<float> jtphi(reader, "jtphi");
     TTreeReaderArray<int> subid(reader, "subid");
-    TTreeReaderArray<float> * csvv1 = new TTreeReaderArray<float>(reader,sample=="bjV" || sample=="qcV" || sample=="bfV" ? "discr_csvSimple" :"discr_csvV1");//(sample=="qcs" || sample=="pqc" || sample=="pfc") ? "discr_csvV1" : "discr_csvSimple");
+
+    TTreeReaderValue<int> ngen(reader, "ngen");
+    TTreeReaderArray<float> genpt(reader,"genpt");
+    TTreeReaderArray<float> geneta(reader,"geneta");
+    TTreeReaderArray<float> genphi(reader,"genphi");
+    TTreeReaderArray<int> gensubid(reader,"gensubid");
+
+
+
+    TTreeReaderArray<float> * csvv1 = new TTreeReaderArray<float>(reader,sample=="bjV" || sample=="qcV" || sample=="bfV" ? "discr_csvSimple" :"discr_csvV1");
     //discr_csvV1 in new forests
 
 
@@ -503,7 +513,10 @@ void do_buildtuplemc(TString code)
       bool foundJ1=false, foundJ2 = false, foundSignalJ2 = false, foundJ3 = false, foundSL = false, foundSignalSL = false, foundSB = false; //found/not found yet, for convenience
       bool bkgJ1 = false; // is leading jet coming from background?
 
-      if (abs(*vz)<15) //event-level cuts, if not passed all foundXY = false
+      int genmaxind = *ngen>0 ? 0 : -1;
+
+
+      if (abs(*vz)<15) {//event-level cuts, if not passed all foundXY = false
         for (int j=0;j<*nref;j++) {
           if (abs(jteta[j])>2.0) continue; //1.5 for PU!
 
@@ -569,12 +582,23 @@ void do_buildtuplemc(TString code)
 
           }
 
+	for (int ig=0;ig<*ngen;ig++)
+	  if (genpt[ig]>genpt[genmaxind])
+	    genmaxind = ig;
+
+      }
+
       vector<float> vdj;
 
       vdj = {(float)*run, (float)*lumi, (float)*event, (float)*CaloJet40,(float)*CaloJet60,(float)*CaloJet80, (float)*CSV60, (float)*CSV80,
         *pthat,(float)pthats[i], (float)evCounter-1, (float)weights[getind(*pthat)], (float)*bin, *vz,*hiHF,
         newFlavorProcess ? (float)*(*bProdCode) : NaN,
         foundJ1 && foundJ2 ? (float)1 : (float)0, (float)bkgJ1,
+
+	genmaxind!=-1 ? genpt[genmaxind] : NaN,
+	genmaxind!=-1 ? geneta[genmaxind] : NaN,
+	genmaxind!=-1 ? genphi[genmaxind] : NaN,
+	genmaxind!=-1 ? (float)gensubid[genmaxind] : NaN,
 
         foundJ1 ? (float)subid[ind1] : NaN,
         foundJ1 ? refpt[ind1] : NaN,
@@ -751,14 +775,15 @@ void update(TString filename, TF1 * fcentrWeight, TF1 *fvertexWeight, bool bfc =
 
   auto nt = (TTree *)f->Get("nt");
 
-  float weight,cweight,pthatweight, vz;
+  float weight,cweight,vweight, pthatweight, vz;
   float bin;
-  TBranch *cw = 0, *w = 0;
+  TBranch *cw = 0, *w = 0, *vw = 0;
   if (PbPb) {
     cw =  nt->Branch("centrWeight",&cweight);
     nt->SetBranchAddress("bin",&bin);
   }
   w =  nt->Branch("weight",&weight);
+  vw =  nt->Branch("vertexWeight",&vweight);
   nt->SetBranchAddress( !bfc ? "pthatweight" : "fcrweight",&pthatweight);
   nt->SetBranchAddress("vz",&vz);
 
@@ -771,11 +796,13 @@ void update(TString filename, TF1 * fcentrWeight, TF1 *fvertexWeight, bool bfc =
 
 
     cweight=PbPb ? fcentrWeight->Eval(bin)  : 1; //cweights[bin-1]
-    weight=pthatweight*cweight*fvertexWeight->Eval(vz);
+    vweight = fvertexWeight->Eval(vz);
+    weight=pthatweight*cweight*vweight;
 
     if (PbPb)
       cw->Fill();
     w->Fill();
+    vw->Fill();
   }
 
   nt->Write();

@@ -1,19 +1,20 @@
-root -l <<< ".L buildtupledata.C+"
+#root -l <<< ".L buildtupledata.C+"
 root -l <<< ".L buildtuplemc.C+"
 
 #pp
-#root -l -q -b buildtuplemc.C+\(\"mcppqcdak4PF\"\) >out_mcppqcdak4PF &
-#root -l -q -b buildtuplemc.C+\(\"mcppbjtak4PF\"\) >out_mcppbjtak4PF &
-#root -l -q -b buildtuplemc.C+\(\"mcppqcdak3PF\"\) >out_mcppqcdak3PF &
-#root -l -q -b buildtuplemc.C+\(\"mcppbjtak3PF\"\) >out_mcppbjtak3PF &
+root -l -q -b buildtuplemc.C+\(\"mcppqcdak4PF\"\) >out_mcppqcdak4PF &
+root -l -q -b buildtuplemc.C+\(\"mcppbjtak4PF\"\) >out_mcppbjtak4PF &
+root -l -q -b buildtuplemc.C+\(\"mcppqcdak3PF\"\) >out_mcppqcdak3PF &
+root -l -q -b buildtuplemc.C+\(\"mcppbjtak3PF\"\) >out_mcppbjtak3PF &
 #pyquen
 #root -l -q -b buildtuplemc.C+\(\"mcPbpqcakPu4PF\"\) >out_mcPbpqcakPu4PF &
 #root -l -q -b buildtuplemc.C+\(\"mcPbpfcakPu4PF\"\) >out_mcPbpfcakPu4PF &
+
 #PbPb
-root -l -q -b buildtuplemc.C+\(\"mcPbqcdakPu4PF\"\) >out_mcPbqcdakPu4PF &
-root -l -q -b buildtuplemc.C+\(\"mcPbbjtakPu4PF\"\) >out_mcPbbjtakPu4PF &
-root -l -q -b buildtuplemc.C+\(\"mcPbqcdakPu3PF\"\) >out_mcPbqcdakPu3PF &
-root -l -q -b buildtuplemc.C+\(\"mcPbbjtakPu3PF\"\) >out_mcPbbjtakPu3PF &
+#root -l -q -b buildtuplemc.C+\(\"mcPbqcdakPu4PF\"\) >out_mcPbqcdakPu4PF &
+#root -l -q -b buildtuplemc.C+\(\"mcPbbjtakPu4PF\"\) >out_mcPbbjtakPu4PF &
+#root -l -q -b buildtuplemc.C+\(\"mcPbqcdakPu3PF\"\) >out_mcPbqcdakPu3PF &
+#root -l -q -b buildtuplemc.C+\(\"mcPbbjtakPu3PF\"\) >out_mcPbbjtakPu3PF &
 
 #root -l -q -b buildtuplemc.C+\(\"mcPbqcdakPu3PF\"\) >out_mcPbqcdakPu3PF &
 #root -l -q -b buildtuplemc.C+\(\"mcPbbjtakPu3PF\"\) >out_mcPbbjtakPu3PF &
